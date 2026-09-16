@@ -11,6 +11,16 @@
 {% endblock %}
 
 
+{% block head %}
+{{ super() }}
+<script>
+  (function() {
+    var theme = localStorage.getItem('blogg-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
+{% endblock %}
+
 {% block navbar %}
 <nav class="navbar navbar-inverse">
   <div class="container">
@@ -41,7 +51,22 @@
         {% endif %}
       </ul>
 
+      <form class="navbar-form navbar-left search-form" role="search" action="{{ url_for('main.search') }}" method="get">
+        <div class="input-group search-group">
+          <input type="text" class="form-control search-input" placeholder="Search posts & users..." name="q" value="{{ request.args.get('q', '') }}">
+          <span class="input-group-btn">
+            <button class="btn btn-default search-btn" type="submit" aria-label="Search">🔍</button>
+          </span>
+        </div>
+      </form>
+
       <ul class="nav navbar-nav navbar-right">
+        <li>
+          <button id="theme-toggle" class="theme-toggle-btn" title="Toggle dark/light mode" aria-label="Toggle dark mode">
+            <span id="theme-toggle-icon">🌙</span>
+          </button>
+        </li>
+
         {% if current_user.can(Permission.MODERATE) %}
         <li>
           <a href="{{ url_for('main.moderate') }}">Moderate Comments</a>
@@ -84,4 +109,57 @@
 {% block scripts %}
 {{ super() }}
 {{ moment.include_moment() }}
+<script>
+  // Theme toggle handler
+  (function() {
+    var btn = document.getElementById('theme-toggle');
+    var icon = document.getElementById('theme-toggle-icon');
+    function updateIcon(theme) {
+      if (icon) icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+    var current = document.documentElement.getAttribute('data-theme') || 'light';
+    updateIcon(current);
+
+    if (btn) {
+      btn.addEventListener('click', function() {
+        var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('blogg-theme', next);
+        updateIcon(next);
+      });
+    }
+  })();
+
+  // AJAX Like button functionality
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.like-form').forEach(function(form) {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var btn = form.querySelector('.btn-like');
+        var countEl = form.querySelector('.like-count');
+        fetch(form.action, {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+          }
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data.liked) {
+            btn.classList.add('liked');
+          } else {
+            btn.classList.remove('liked');
+          }
+          if (countEl) {
+            countEl.textContent = data.likes_count;
+          }
+        })
+        .catch(function(err) {
+          form.submit();
+        });
+      });
+    });
+  });
+</script>
 {% endblock %}

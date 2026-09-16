@@ -1,6 +1,6 @@
 <ul class="posts">
   {% for post in posts %}
-  <li class="post">
+  <li class="post" id="post-{{ post.id }}">
     <div class="post-thumbnail">
       <a href="{{ url_for('.user', username=post.author.username) }}">
         <img class="img-circle profile-thumbnail" src="{{ post.author.gravatar(size=48) }}" alt="{{ post.author.username }}">
@@ -12,6 +12,7 @@
           <a href="{{ url_for('.user', username=post.author.username) }}">{{ post.author.username }}</a>
         </span>
         <span class="post-date">&bull; {{ moment(post.timestamp).fromNow() }}</span>
+        <span class="post-reading-time">&bull; {{ post.reading_time }}</span>
       </div>
       <div class="post-body">
         {% if post.body_html %}
@@ -21,6 +22,20 @@
         {% endif %}
       </div>
       <div class="post-footer">
+        {% if current_user.is_authenticated %}
+        <form action="{{ url_for('.like_post', id=post.id) }}" method="post" class="like-form" style="display:inline-block;" data-post-id="{{ post.id }}">
+          <button type="submit" class="btn-like {% if current_user.has_liked_post(post) %}liked{% endif %}" title="Like this post">
+            <span class="like-icon">♥</span>
+            <span class="like-count">{{ post.likes.count() }}</span>
+          </button>
+        </form>
+        {% else %}
+        <span class="btn-like disabled" title="Likes">
+          <span class="like-icon">♥</span>
+          <span class="like-count">{{ post.likes.count() }}</span>
+        </span>
+        {% endif %}
+
         {% if current_user == post.author %}
         <a href="{{ url_for('.edit', id=post.id) }}" class="label label-primary">Edit</a>
         {% elif current_user.is_administrator() %}
