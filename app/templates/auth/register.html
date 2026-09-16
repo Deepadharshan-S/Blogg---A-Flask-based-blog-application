@@ -4,18 +4,27 @@
 {% block title %}Blogg - Register{% endblock %}
 
 {% block page_content %}
-<div class="container">
-    <div class="row">
-        <div class="col-md-4 col-md-offset-4">
-            <h2 class="text-center">Register</h2>
-            <div class="well">
-                {{ wtf.quick_form(form, button_map={"submit": "btn btn-primary btn-block"}) }}
-            </div>
-            <p class="text-center">
-                Have an account?
-                <a href="{{ url_for('auth.login') }}">Click here to login</a>
-            </p>
-        </div>
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-header text-center">
+      <div class="auth-icon">✨</div>
+      <h2>Create an Account</h2>
+      <p>Join the Blogg community today</p>
     </div>
+
+    <div class="auth-body">
+      {{ wtf.quick_form(form, button_map={"submit": "btn btn-primary btn-block"}) }}
+    </div>
+
+    <div class="auth-footer text-center">
+      <div class="auth-divider">
+        <span>or</span>
+      </div>
+      <p class="auth-subtext">
+        Already have an account?
+        <a href="{{ url_for('auth.login') }}" class="auth-register-link">Log in here &rarr;</a>
+      </p>
+    </div>
+  </div>
 </div>
 {% endblock %}

@@ -1,25 +1,33 @@
 {% extends "base.html" %}
 {% import "bootstrap/wtf.html" as wtf %}
 
-{% block title %}Blogg - Login{% endblock %}
+{% block title %}Blogg - Log In{% endblock %}
 
 {% block page_content %}
-<div class="container">
-    <div class="row">
-        <div class="col-md-4 col-md-offset-4">
-            <h2 class="text-center">Login</h2>
-            <div class="well">
-                {{ wtf.quick_form(form, button_map={"submit": "btn btn-primary btn-block"}) }}
-            </div>
-            <p class="text-center">
-                Forgot your password?
-                <a href="{{ url_for('auth.password_reset_request') }}">Click here to reset it</a>.
-            </p>
-            <p class="text-center">
-                New user?
-                <a href="{{ url_for('auth.register') }}">Click here to register</a>
-            </p>
-        </div>
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-header text-center">
+      <div class="auth-icon">🔐</div>
+      <h2>Welcome Back</h2>
+      <p>Enter your credentials to access your account</p>
     </div>
+
+    <div class="auth-body">
+      {{ wtf.quick_form(form, button_map={"submit": "btn btn-primary btn-block"}) }}
+    </div>
+
+    <div class="auth-footer text-center">
+      <p class="auth-link">
+        <a href="{{ url_for('auth.password_reset_request') }}">Forgot your password?</a>
+      </p>
+      <div class="auth-divider">
+        <span>or</span>
+      </div>
+      <p class="auth-subtext">
+        New to Blogg?
+        <a href="{{ url_for('auth.register') }}" class="auth-register-link">Create an account &rarr;</a>
+      </p>
+    </div>
+  </div>
 </div>
 {% endblock %}

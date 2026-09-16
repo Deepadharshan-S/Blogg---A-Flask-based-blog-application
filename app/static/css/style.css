@@ -632,3 +632,153 @@ h1, h2, h3, h4, h5, h6 {
   border-color: var(--primary);
   color: #ffffff;
 }
+
+/* --- Authentication Pages (Login, Register, Password Reset) --- */
+.auth-page {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 15px 60px 15px;
+}
+
+.auth-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 36px 32px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: var(--card-hover-shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.auth-header {
+  margin-bottom: 26px;
+}
+
+.auth-header h2 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 8px 0 6px 0;
+  color: var(--text-main);
+  letter-spacing: -0.3px;
+}
+
+.auth-header .auth-icon {
+  font-size: 32px;
+  margin-bottom: 4px;
+  display: inline-block;
+}
+
+.auth-header p {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.auth-body .form-group {
+  margin-bottom: 18px;
+}
+
+.auth-body label {
+  color: var(--text-main);
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+  display: inline-block;
+}
+
+.auth-body .checkbox {
+  margin: 15px 0;
+  padding-left: 0;
+}
+
+.auth-body .checkbox label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-body);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.auth-body .checkbox input[type="checkbox"] {
+  position: static;
+  margin: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.auth-body .btn-block {
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 14px;
+  border-radius: 8px;
+}
+
+.auth-footer {
+  margin-top: 24px;
+}
+
+.auth-link a {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.auth-link a:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.auth-divider {
+  position: relative;
+  text-align: center;
+  margin: 18px 0;
+}
+
+.auth-divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: var(--border-color);
+}
+
+.auth-divider span {
+  position: relative;
+  background-color: var(--bg-card);
+  padding: 0 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.auth-subtext {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.auth-register-link {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+  margin-left: 4px;
+}
+
+.auth-register-link:hover {
+  color: var(--primary-hover);
+  text-decoration: underline;
+}
+
