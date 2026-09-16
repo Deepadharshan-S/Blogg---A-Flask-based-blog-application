@@ -1,0 +1,108 @@
+<style>
+    .comments {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .comment {
+        display: flex;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease-in-out;
+    }
+
+    .comment:hover {
+        transform: translateY(-2px);
+    }
+
+    .comment-thumbnail {
+        margin-right: 10px;
+    }
+
+    .comment-thumbnail img {
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        border: 2px solid #ddd;
+    }
+
+    .comment-content {
+        flex-grow: 1;
+    }
+
+    .comment-author a {
+        font-weight: bold;
+        color: #007bff;
+        text-decoration: none;
+    }
+
+    .comment-author a:hover {
+        text-decoration: underline;
+    }
+
+    .comment-date {
+        font-size: 12px;
+        color: #888;
+        margin-bottom: 5px;
+    }
+
+    .comment-body {
+        font-size: 15px;
+        line-height: 1.5;
+        color: #333;
+        margin-top: 5px;
+    }
+
+    .moderation-buttons {
+        margin-top: 10px;
+    }
+
+    .moderation-buttons .btn {
+        font-size: 12px;
+        padding: 3px 6px;
+    }
+</style>
+
+<ul class="comments">
+    {% for comment in comments %}
+    <li class="comment">
+        <div class="comment-thumbnail">
+            <a href="{{ url_for('.user', username=comment.author.username) }}">
+                <img class="img-rounded profile-thumbnail" src="{{ comment.author.gravatar(size=40) }}">
+            </a>
+        </div>
+        <div class="comment-content">
+            <div class="comment-date">{{ moment(comment.timestamp).fromNow() }}</div>
+            <div class="comment-author">
+                <a href="{{ url_for('.user', username=comment.author.username) }}">{{ comment.author.username }}</a>
+            </div>
+            <div class="comment-body">
+                {% if comment.disabled %}
+                <p><i>This comment has been disabled by a moderator.</i></p>
+                {% endif %}
+                {% if moderate or not comment.disabled %}
+                    {% if comment.body_html %}
+                        {{ comment.body_html | safe }}
+                    {% else %}
+                        {{ comment.body }}
+                    {% endif %}
+                {% endif %}
+            </div>
+            {% if moderate %}
+            <div class="moderation-buttons">
+                {% if comment.disabled %}
+                <a class="btn btn-default btn-xs" href="{{ url_for('.moderate_enable', id=comment.id, page=page) }}">Enable</a>
+                {% else %}
+                <a class="btn btn-danger btn-xs" href="{{ url_for('.moderate_disable', id=comment.id, page=page) }}">Disable</a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </li>
+    {% endfor %}
+</ul>

@@ -1,0 +1,145 @@
+<style>
+    .posts {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+  
+    .post {
+      display: flex;
+      background: #ffffff;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+  
+    .post:hover {
+      transform: translateY(-3px);
+      box-shadow: 0px 6px 12px rgba(0, 0, 0, 0.15);
+    }
+  
+    .post-thumbnail {
+      margin-right: 15px;
+    }
+  
+    .profile-thumbnail img {
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      border: 2px solid #ddd;
+      transition: border-color 0.3s;
+    }
+  
+    .profile-thumbnail img:hover {
+      border-color: #007bff;
+    }
+  
+    .post-content {
+      flex: 1;
+    }
+  
+    .post-date {
+      font-size: 12px;
+      color: #777;
+      font-style: italic;
+      margin-bottom: 5px;
+    }
+  
+    .post-author a {
+      font-weight: 600;
+      color: #007bff;
+      text-decoration: none;
+      font-size: 16px;
+    }
+  
+    .post-author a:hover {
+      text-decoration: underline;
+    }
+  
+    .post-body {
+      font-size: 16px;
+      line-height: 1.6;
+      color: #444;
+      margin-top: 10px;
+    }
+  
+    .post-footer {
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+    }
+  
+    .post-footer .label {
+      padding: 6px 12px;
+      font-size: 14px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+  
+    .label-primary {
+      background: #007bff;
+      color: white;
+    }
+  
+    .label-primary:hover {
+      background: #0056b3;
+    }
+  
+    .label-danger {
+      background: #dc3545;
+      color: white;
+    }
+  
+    .label-danger:hover {
+      background: #a71d2a;
+    }
+  
+    .label-default {
+      background: #6c757d;
+      color: white;
+    }
+  
+    .label-default:hover {
+      background: #545b62;
+    }
+  </style>
+  
+  <ul class="posts">
+    {% for post in posts %}
+    <li class="post">
+      <div class="post-thumbnail">
+        <a href="{{ url_for('.user', username=post.author.username) }}">
+          <img class="img-rounded profile-thumbnail" src="{{ post.author.gravatar(size=50) }}">
+        </a>
+      </div>
+      <div class="post-content">
+        <div class="post-date">{{ moment(post.timestamp).fromNow() }}</div>
+        <div class="post-author">
+          <a href="{{ url_for('.user', username=post.author.username) }}">{{ post.author.username }}</a>
+        </div>
+        <div class="post-body">
+          {% if post.body_html %}
+            {{ post.body_html | safe }}
+          {% else %}
+            {{ post.body }}
+          {% endif %}
+        </div>
+        <div class="post-footer">
+          {% if current_user == post.author %}
+          <a href="{{ url_for('.edit', id=post.id) }}" class="label label-primary">Edit</a>
+          {% elif current_user.is_administrator() %}
+          <a href="{{ url_for('.edit', id=post.id) }}" class="label label-danger">Edit [Admin]</a>
+          {% endif %}
+          <a href="{{ url_for('.post', id=post.id) }}" class="label label-default">Permalink</a>
+          <a href="{{ url_for('.post', id=post.id) }}#comments" class="label label-primary">
+            {{ post.comments.count() }} Comments
+          </a>
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  

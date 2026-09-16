@@ -1,0 +1,6 @@
+Hello Admin,
+
+A new user has registered: {{ user.username }}
+
+Best regards,
+Your Blogg App

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Forbidden</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            margin: 0;
+        }
+        .error-container {
+            max-width: 500px;
+            background: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            font-size: 80px;
+            color: #dc3545;
+            margin: 0;
+        }
+        p {
+            font-size: 18px;
+            margin: 15px 0;
+        }
+        a {
+            color: #007BFF;
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <h1>403</h1>
+        <p>Access Denied</p>
+        <p>You do not have permission to access this page.</p>
+        <p><a href="{{ url_for('main.index') }}">Return to Home</a></p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,52 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables & secrets (CRITICAL)
+.env
+.env.*
+!.env.example
+
+# Databases & local storage
+*.sqlite
+*.sqlite3
+*.db
+instance/
+flask_session/
+
+# Application logs
+logs/
+*.log
+
+# Unit test & coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+
+# Build & distribution
+build/
+dist/
+*.egg-info/
+*.egg
+
+# IDE & Editor settings
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
