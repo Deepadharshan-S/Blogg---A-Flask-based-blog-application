@@ -1,4 +1,4 @@
-# Blogg (Flasky)
+# Blogg
 
 A full-featured blogging and social networking web application built with **Flask 3.1**, **SQLAlchemy 2.0**, and managed by **uv**.
 
@@ -10,20 +10,31 @@ A full-featured blogging and social networking web application built with **Flas
   - Registration, login, logout, password reset, and email confirmation via signed cryptographic tokens.
   - Rate limiting with Flask-Limiter on login endpoints.
   - Strong password requirements (regex validation) and Werkzeug password hashing.
+  - Standard HTTP security headers (`X-Frame-Options`, `X-Content-Type-Options`, `X-XSS-Protection`).
 - **Role-Based Access Control (RBAC)**:
   - Permissions bitmask (`FOLLOW`, `COMMENT`, `WRITE`, `MODERATE`, `ADMIN`).
   - Roles: `User`, `Moderator`, `Administrator`.
   - Decorated endpoints using `@permission_required` and `@admin_required`.
 - **Blogging & Social Network**:
   - Markdown post editor with live preview (Flask-PageDown) and server-side Bleach HTML sanitization.
+  - Estimated reading time on every post (e.g. `• 2 min read`).
+  - Interactive post likes with AJAX updates.
+  - Full-text search for posts and users.
+  - Dark mode / light mode toggle with local storage persistence.
   - User profile pages, Gravatar integration, and automatic `last_seen` timestamp tracking.
   - Follow/unfollow users and toggle feeds between "All Posts" and "Followed Users".
 - **Comment System & Moderation**:
   - Comment threads on posts.
   - Moderation dashboard allowing moderators and administrators to review and hide/unhide comments.
+- **Headless REST API v1 (`/api/v1`)**:
+  - Token-based authentication (`POST /api/v1/tokens`).
+  - JSON endpoints for posts, comments, profiles, and post likes.
 - **Background Tasks & Observability**:
   - Asynchronous email notifications via background worker threads.
   - Rotating file logging (`logs/blogg.log`).
+- **Modern Code Quality Tooling**:
+  - Ruff linter & formatter configuration (`flask lint`, `flask lint-fix`).
+  - Code coverage reporting (`flask test-cov`).
 
 ---
 
@@ -46,7 +57,7 @@ Clone the repository and install all dependencies:
 
 ```bash
 git clone <repository-url>
-cd flasky
+cd blogg
 
 # Install dependencies into virtual environment using uv
 uv sync
@@ -61,6 +72,7 @@ cp .env.example .env
 ```
 
 Open `.env` and fill in:
+- `FLASK_APP`: Set to `blogg.py` (default).
 - `SECRET_KEY`: A strong secret key (generate with `python -c "import secrets; print(secrets.token_hex(16))"`).
 - `MAIL_USERNAME` and `MAIL_PASSWORD`: SMTP credentials for sending verification emails.
 - `BLOGG_ADMIN`: Email of the default administrator account.
@@ -70,17 +82,14 @@ Open `.env` and fill in:
 Initialize database roles and seed sample data:
 
 ```bash
-# Apply database migrations
-uv run flask db upgrade
+# Apply database migrations and insert default roles
+uv run flask init-db
 
-# (Optional) Seed roles and initial fake data via Flask shell
-uv run flask shell
->>> from app.models import Role
->>> Role.insert_roles()
->>> from app import fake
->>> fake.users(10)
->>> fake.posts(20)
->>> exit()
+# (Optional) Seed an administrator account
+uv run flask seed-admin --email admin@example.com --username admin
+
+# (Optional) Seed sample users and posts
+uv run flask seed-data --users 20 --posts 50
 ```
 
 ### 5. Run the Application
@@ -88,25 +97,35 @@ uv run flask shell
 Start the Flask development server:
 
 ```bash
-uv run flask --app flasky run
+uv run flask run --debug
+```
+
+Or explicitly specify the app:
+
+```bash
+uv run flask --app blogg run --debug
 ```
 
 The application will be accessible at `http://127.0.0.1:5000`.
 
 ---
 
-## Running Tests
+## Developer Commands & Testing
 
-Run the test suite using `uv`:
-
-```bash
-uv run python -m unittest discover -s tests
-```
-
-Or using `pytest`:
+Run unit tests and linting via custom CLI commands:
 
 ```bash
-uv run pytest
+# Run unit test suite
+uv run flask test
+
+# Run tests with code coverage report
+uv run flask test-cov
+
+# Check linting and formatting
+uv run flask lint
+
+# Auto-format and fix lint issues
+uv run flask lint-fix
 ```
 
 ---
@@ -114,21 +133,23 @@ uv run pytest
 ## Project Structure
 
 ```plaintext
-flasky/
+blogg/
 ├── app/                       # Core application factory & blueprints
+│   ├── api/                   # Headless REST API v1 endpoints
 │   ├── auth/                  # Authentication blueprint (routes, forms)
-│   ├── main/                  # Core blog features (posts, comments, profiles)
-│   ├── models.py              # Database models (User, Role, Post, Comment, Follow)
+│   ├── main/                  # Core blog features (posts, comments, profiles, search)
+│   ├── models.py              # Database models (User, Role, Post, Comment, Follow, PostLike)
 │   ├── decorators.py          # RBAC decorators
 │   ├── email.py               # Async email utility
 │   ├── fake.py                # Fake data generator
-│   └── templates/             # Jinja2 templates (Bootstrap)
-├── tests/                     # Unit test suite
+│   ├── static/                # CSS, fonts, and client-side assets
+│   └── templates/             # Jinja2 templates (Inter + Dark/Light mode)
+├── tests/                     # Unit test suite (basic, user model, API)
 ├── migrations/                # Database migration scripts (Alembic)
 ├── pyproject.toml             # Project configuration and uv dependencies
 ├── uv.lock                    # Deterministic dependency lockfile
 ├── config.py                  # Configuration environments
-├── flasky.py                  # Application entry point & shell context
+├── blogg.py                   # Application entry point & custom CLI commands
 ├── .env.example               # Template environment configuration
 └── .gitignore                 # Git ignore rules
 ```

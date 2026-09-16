@@ -101,9 +101,9 @@ def lint_command():
     import subprocess
 
     click.echo("Running ruff check...")
-    check = subprocess.run(["ruff", "check", "app", "tests", "flasky.py", "config.py"])
+    check = subprocess.run(["ruff", "check", "app", "tests", "blogg.py", "config.py"])
     click.echo("Running ruff format check...")
-    fmt = subprocess.run(["ruff", "format", "--check", "app", "tests", "flasky.py", "config.py"])
+    fmt = subprocess.run(["ruff", "format", "--check", "app", "tests", "blogg.py", "config.py"])
     if check.returncode != 0 or fmt.returncode != 0:
         raise SystemExit(1)
     click.echo("Linting checks passed!")
@@ -115,9 +115,9 @@ def lint_fix_command():
     import subprocess
 
     click.echo("Fixing lint issues...")
-    subprocess.run(["ruff", "check", "--fix", "app", "tests", "flasky.py", "config.py"])
+    subprocess.run(["ruff", "check", "--fix", "app", "tests", "blogg.py", "config.py"])
     click.echo("Formatting code...")
-    subprocess.run(["ruff", "format", "app", "tests", "flasky.py", "config.py"])
+    subprocess.run(["ruff", "format", "app", "tests", "blogg.py", "config.py"])
     click.echo("Ruff auto-fix and formatting complete.")
 
 
