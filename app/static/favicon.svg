@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#0f172a" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <!-- Background squircle -->
+  <rect width="64" height="64" rx="16" fill="url(#bgGrad)"/>
+  
+  <!-- Subtle glowing accent dot -->
+  <circle cx="50" cy="14" r="4.5" fill="#38bdf8"/>
+
+  <!-- Clean, bold B letterform -->
+  <path d="M19 14h13.5c6.2 0 10.5 3.2 10.5 8 0 3.3-2.1 6.2-5.7 7.2 4.4 1 7.2 4.2 7.2 8.8 0 6-4.8 10-12 10H19V14zm8.2 8v8.6h4.8c3.2 0 5.2-1.6 5.2-4.3 0-2.7-2-4.3-5.2-4.3h-4.8zm0 14.8v9.2h5.6c3.8 0 6-1.8 6-4.6 0-2.8-2.2-4.6-6-4.6h-5.6z" fill="#ffffff" filter="url(#shadow)"/>
+</svg>

@@ -335,6 +335,11 @@ def search():
     )
 
 
+@main.route("/favicon.ico")
+def favicon():
+    return current_app.send_static_file("favicon.svg")
+
+
 @main.route("/shutdown")
 def server_shutdown():
     if not current_app.testing:
