@@ -8,7 +8,8 @@ def send_async_email(app, msg):
         mail.send(msg)
 
 def send_email(to, subject, template, **kwargs):
-    msg = Message(subject=current_app.config['BLOGG_MAIL_SUBJECT_PREFIX'] + subject,
+    prefix = current_app.config.get('BLOGG_MAIL_SUBJECT_PREFIX', '[BLOGG]').strip()
+    msg = Message(subject=f"{prefix} {subject}",
                   sender=current_app.config['BLOGG_MAIL_SENDER'],
                   recipients=[to])
     msg.body = render_template(template + '.txt', **kwargs)

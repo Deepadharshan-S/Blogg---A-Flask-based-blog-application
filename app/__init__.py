@@ -20,7 +20,11 @@ mail = Mail()
 moment = Moment()
 db = SQLAlchemy()
 pagedown = PageDown()
-limiter=Limiter(get_remote_address)
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["500 per day", "100 per hour"],
+    storage_uri="memory://"
+)
 
 def create_app(config_name):
     app = Flask(__name__)
@@ -39,10 +43,17 @@ def create_app(config_name):
     from .main import main as main_blueprint
     app.register_blueprint(main_blueprint)
     
-    
     from .auth import auth as auth_blueprint
     app.register_blueprint(auth_blueprint, url_prefix='/auth')
-    
+
+    # Security Headers
+    @app.after_request
+    def set_security_headers(response):
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        return response
     
     if not os.path.exists('logs'):
         os.mkdir('logs')

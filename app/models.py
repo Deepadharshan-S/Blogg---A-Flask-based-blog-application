@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash,check_password_hash
 from flask_login import UserMixin,AnonymousUserMixin
 from itsdangerous import TimestampSigner, BadSignature, SignatureExpired 
 from flask import current_app
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 from flask import request
 from markdown import markdown
@@ -70,7 +70,7 @@ class Follow(db.Model):
     __tablename__ = 'follows'
     follower_id = db.Column(db.Integer, db.ForeignKey('users.id'),primary_key=True)
     followed_id = db.Column(db.Integer, db.ForeignKey('users.id'),primary_key=True)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 class User(UserMixin,db.Model):
     __tablename__ = 'users'
@@ -78,13 +78,13 @@ class User(UserMixin,db.Model):
     email = db.Column(db.String(64), unique=True, index=True)
     username = db.Column(db.String(64), unique=True, index=True)
     password_hash = db.Column(db.String(128))
-    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
+    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'), index=True)
     confirmed = db.Column(db.Boolean, default=False)
     name = db.Column(db.String(64))
     location = db.Column(db.String(64))
     about_me = db.Column(db.Text())
-    member_since = db.Column(db.DateTime(), default=datetime.utcnow)
-    last_seen = db.Column(db.DateTime(), default=datetime.utcnow)
+    member_since = db.Column(db.DateTime(), default=lambda: datetime.now(timezone.utc))
+    last_seen = db.Column(db.DateTime(), default=lambda: datetime.now(timezone.utc))
     avatar_hash = db.Column(db.String(32))
     posts = db.relationship('Post', backref='author', lazy='dynamic')
     followed = db.relationship('Follow',foreign_keys=[Follow.follower_id],
@@ -137,7 +137,7 @@ class User(UserMixin,db.Model):
         return f'<User {self.username}>'
     
     def ping(self):
-        self.last_seen = datetime.utcnow()
+        self.last_seen = datetime.now(timezone.utc)
         db.session.add(self)
         db.session.commit()
     
@@ -268,8 +268,8 @@ class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     body = db.Column(db.Text)
     body_html = db.Column(db.Text)
-    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
-    author_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    timestamp = db.Column(db.DateTime, index=True, default=lambda: datetime.now(timezone.utc))
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
     comments = db.relationship('Comment', backref='post', lazy='dynamic')
     
     
@@ -294,10 +294,10 @@ class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     body = db.Column(db.Text)
     body_html = db.Column(db.Text)
-    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, index=True, default=lambda: datetime.now(timezone.utc))
     disabled = db.Column(db.Boolean)
-    author_id = db.Column(db.Integer, db.ForeignKey('users.id'))
-    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'))
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), index=True)
     
     @staticmethod
     def on_changed_body(target, value, oldvalue, initiator):

@@ -1,5 +1,6 @@
 from datetime import datetime
 from flask import render_template, request, redirect, url_for, current_app, flash, abort, make_response
+from sqlalchemy.orm import joinedload
 from . import main
 from .forms import EditProfileForm, EditProfileAdminForm,PostForm, CommentForm
 from .. import db
@@ -23,21 +24,21 @@ def index():
     if current_user.is_authenticated:
         show_followed = bool(request.cookies.get('show_followed', ''))
     if show_followed:
-        query = current_user.followed_posts
+        query = current_user.followed_posts.options(joinedload(Post.author))
     else:
-        query = Post.query
+        query = Post.query.options(joinedload(Post.author))
     pagination = query.order_by(Post.timestamp.desc()).paginate(
         page=page, per_page=current_app.config['BLOGG_POSTS_PER_PAGE'],
         error_out=False)
     posts = pagination.items
-    return render_template('index.html', form=form, posts=posts,pagination=pagination)
+    return render_template('index.html', form=form, posts=posts, pagination=pagination, show_followed=show_followed)
 
 
 @main.route('/user/<username>')
 def user(username):
     user = User.query.filter_by(username=username).first_or_404()
     page = request.args.get('page', 1, type=int)
-    pagination = user.posts.order_by(Post.timestamp.desc()).paginate(
+    pagination = user.posts.options(joinedload(Post.author)).order_by(Post.timestamp.desc()).paginate(
         page=page, per_page=current_app.config['BLOGG_POSTS_PER_PAGE'],
         error_out=False)
     posts = pagination.items
@@ -93,7 +94,7 @@ def edit_profile_admin(id):
 
 @main.route('/post/<int:id>', methods=['GET', 'POST'])
 def post(id):
-    post = Post.query.get_or_404(id)
+    post = Post.query.options(joinedload(Post.author)).get_or_404(id)
     form = CommentForm()
     if form.validate_on_submit():
         comment = Comment(body=form.body.data,post=post,author=current_user._get_current_object())
@@ -106,7 +107,7 @@ def post(id):
     page = request.args.get('page', 1, type=int)
     if page == -1:
         page = (post.comments.count() - 1) // current_app.config['BLOGG_COMMENTS_PER_PAGE'] + 1
-    pagination = post.comments.order_by(Comment.timestamp.asc()).paginate(page=page, per_page=current_app.config['BLOGG_COMMENTS_PER_PAGE'],error_out=False)
+    pagination = post.comments.options(joinedload(Comment.author)).order_by(Comment.timestamp.asc()).paginate(page=page, per_page=current_app.config['BLOGG_COMMENTS_PER_PAGE'],error_out=False)
     comments = pagination.items
     return render_template('post.html', posts=[post], form=form,comments=comments, pagination=pagination)
 
@@ -214,8 +215,13 @@ def show_followed():
 @permission_required(Permission.MODERATE)
 def moderate():
     page = request.args.get('page', 1, type=int)
-    pagination = Comment.query.order_by(Comment.timestamp.desc()).paginate(page=page, per_page=current_app.config['BLOGG_COMMENTS_PER_PAGE'],
-    error_out=False)
+    pagination = Comment.query.options(
+        joinedload(Comment.author),
+        joinedload(Comment.post)
+    ).order_by(Comment.timestamp.desc()).paginate(
+        page=page, per_page=current_app.config['BLOGG_COMMENTS_PER_PAGE'],
+        error_out=False
+    )
     comments = pagination.items
     return render_template('moderate.html', comments=comments,pagination=pagination, page=page)
 

@@ -1,0 +1,449 @@
+/* ==========================================================================
+   Blogg - Modern UI Design System
+   Font: Inter
+   Theme: Slate & Indigo
+   ========================================================================== */
+
+/* --- Base Typography & Body --- */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f8fafc;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+}
+
+/* --- Modern Navbar --- */
+.navbar-inverse {
+  background-color: #0f172a;
+  border: none;
+  border-bottom: 1px solid #1e293b;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 0;
+  margin-bottom: 30px;
+}
+
+.navbar-inverse .navbar-brand {
+  font-weight: 700;
+  font-size: 20px;
+  color: #ffffff !important;
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navbar-inverse .navbar-brand::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background: #6366f1;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #6366f1;
+}
+
+.navbar-inverse .navbar-nav > li > a {
+  color: #94a3b8;
+  font-weight: 500;
+  font-size: 14px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  border-radius: 6px;
+  margin: 8px 4px;
+  padding: 8px 14px;
+}
+
+.navbar-inverse .navbar-nav > li > a:hover,
+.navbar-inverse .navbar-nav > li > a:focus {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.navbar-inverse .navbar-nav > .active > a,
+.navbar-inverse .navbar-nav > .active > a:hover,
+.navbar-inverse .navbar-nav > .active > a:focus {
+  color: #ffffff;
+  background-color: #4f46e5;
+}
+
+.navbar-inverse .navbar-nav > li.dropdown > a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navbar-inverse .navbar-nav > li.dropdown > a img {
+  border: 2px solid #4f46e5;
+  box-shadow: 0 0 6px rgba(79, 70, 229, 0.4);
+}
+
+.dropdown-menu {
+  border-radius: 10px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  padding: 6px 0;
+}
+
+.dropdown-menu > li > a {
+  padding: 8px 20px;
+  font-size: 14px;
+  color: #334155;
+  font-weight: 500;
+}
+
+.dropdown-menu > li > a:hover {
+  background-color: #f1f5f9;
+  color: #4f46e5;
+}
+
+/* --- Content Container --- */
+.container {
+  max-width: 960px;
+}
+
+/* --- Modern Flash Alerts --- */
+.alert {
+  border-radius: 10px;
+  border: none;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.alert-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+  border-left: 4px solid #f59e0b;
+}
+
+.alert-info {
+  background-color: #e0e7ff;
+  color: #3730a3;
+  border-left: 4px solid #6366f1;
+}
+
+.alert-success {
+  background-color: #d1fae5;
+  color: #065f46;
+  border-left: 4px solid #10b981;
+}
+
+.alert-danger {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border-left: 4px solid #ef4444;
+}
+
+/* --- Modern Post Cards --- */
+.posts {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0;
+}
+
+.post {
+  display: flex;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+.post:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1;
+  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.05), 0 6px 12px -6px rgba(0, 0, 0, 0.03);
+}
+
+.post-thumbnail {
+  margin-right: 16px;
+  flex-shrink: 0;
+}
+
+.profile-thumbnail img,
+.post-thumbnail img {
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  border: 2px solid #f1f5f9;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.post-thumbnail a:hover img {
+  transform: scale(1.05);
+  border-color: #6366f1;
+}
+
+.post-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.post-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.post-author a {
+  font-weight: 600;
+  color: #0f172a;
+  text-decoration: none;
+  font-size: 15px;
+  transition: color 0.15s ease;
+}
+
+.post-author a:hover {
+  color: #4f46e5;
+  text-decoration: none;
+}
+
+.post-date {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.post-body {
+  font-size: 15px;
+  line-height: 1.65;
+  color: #334155;
+  margin-top: 6px;
+  word-wrap: break-word;
+}
+
+.post-body p:last-child {
+  margin-bottom: 0;
+}
+
+.post-body blockquote {
+  border-left: 3px solid #6366f1;
+  background: #f8fafc;
+  padding: 10px 16px;
+  border-radius: 0 8px 8px 0;
+  font-size: 14px;
+  color: #475569;
+}
+
+.post-body code {
+  background: #f1f5f9;
+  color: #0f172a;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.post-body pre {
+  background: #0f172a;
+  color: #f8fafc;
+  border: none;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.post-body pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.post-footer {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Modern Chip Badges */
+.post-footer .badge-chip,
+.post-footer .label {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+  line-height: 1.4;
+}
+
+.post-footer .label-primary {
+  background: #eef2ff;
+  color: #4f46e5;
+  border: 1px solid #e0e7ff;
+}
+
+.post-footer .label-primary:hover {
+  background: #4f46e5;
+  color: #ffffff;
+  border-color: #4f46e5;
+}
+
+.post-footer .label-default {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.post-footer .label-default:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.post-footer .label-danger {
+  background: #fef2f2;
+  color: #ef4444;
+  border: 1px solid #fee2e2;
+}
+
+.post-footer .label-danger:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+/* --- Profile Page Styling --- */
+.page-header {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 20px;
+  margin: 20px 0 25px 0;
+}
+
+.profile-header {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 25px;
+}
+
+.profile-header img {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 3px solid #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.profile-info h1 {
+  margin: 0 0 6px 0;
+  font-weight: 700;
+  font-size: 26px;
+  color: #0f172a;
+}
+
+.profile-meta {
+  color: #64748b;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+/* --- Segmented Feed Tabs --- */
+.post-tabs {
+  margin: 20px 0;
+}
+
+.post-tabs .nav-tabs {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.post-tabs .nav-tabs > li > a {
+  border-radius: 8px 8px 0 0;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  margin-right: 4px;
+}
+
+.post-tabs .nav-tabs > li.active > a,
+.post-tabs .nav-tabs > li.active > a:hover,
+.post-tabs .nav-tabs > li.active > a:focus {
+  color: #4f46e5;
+  background-color: #ffffff;
+  border-color: #e2e8f0 #e2e8f0 #ffffff;
+  border-top: 2px solid #4f46e5;
+}
+
+/* --- Form Controls & Buttons --- */
+.form-control {
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  padding: 10px 14px;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: none;
+}
+
+.form-control:focus {
+  border-color: #6366f1;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.btn {
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 8px 18px;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-primary, .btn-default.btn-primary {
+  background-color: #4f46e5;
+  border-color: #4f46e5;
+  color: #ffffff;
+}
+
+.btn-primary:hover, .btn-primary:focus {
+  background-color: #4338ca;
+  border-color: #4338ca;
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+}
+
+.btn-default {
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.btn-default:hover {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+/* --- Pagination Component --- */
+.pagination > li > a,
+.pagination > li > span {
+  color: #475569;
+  border-color: #e2e8f0;
+  font-weight: 500;
+  font-size: 14px;
+  margin: 0 2px;
+  border-radius: 6px;
+}
+
+.pagination > li > a:hover {
+  background-color: #f1f5f9;
+  color: #4f46e5;
+  border-color: #cbd5e1;
+}
+
+.pagination > .active > a,
+.pagination > .active > span,
+.pagination > .active > a:hover,
+.pagination > .active > span:hover {
+  background-color: #4f46e5;
+  border-color: #4f46e5;
+  color: #ffffff;
+}
