@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import hmac
 import json
 from datetime import datetime, timezone
 
@@ -15,6 +16,7 @@ from . import db, login_manager
 CONFIRMATION_TOKEN_SALT = "confirmation-token"
 AUTH_TOKEN_SALT = "api-auth-token"
 CHANGE_EMAIL_TOKEN_SALT = "change-email-token"
+RESET_PASSWORD_TOKEN_SALT = "password-reset-token"
 
 
 class Permission:
@@ -243,6 +245,61 @@ class User(UserMixin, db.Model):
 
         self.confirmed = True
         db.session.add(self)
+        return True
+
+    def generate_reset_token(self, expiration=None):
+        signer = TimestampSigner(current_app.config["SECRET_KEY"], salt=RESET_PASSWORD_TOKEN_SALT)
+        pw_fingerprint = hashlib.sha256((self.password_hash or "").encode("utf-8")).hexdigest()[:16]
+        data = {"reset": self.id, "hash": pw_fingerprint}
+        json_data = json.dumps(data).encode("utf-8")
+        base64_data = base64.urlsafe_b64encode(json_data).decode("utf-8")
+        signed_value = signer.sign(base64_data.encode("utf-8"))
+        return signed_value.decode("utf-8")
+
+    @staticmethod
+    def reset_password(token, password, expiration=None):
+        if not token or not isinstance(token, (str, bytes)) or not password:
+            return False
+
+        signer = TimestampSigner(current_app.config["SECRET_KEY"], salt=RESET_PASSWORD_TOKEN_SALT)
+        max_age = (
+            expiration
+            if expiration is not None
+            else current_app.config.get("RESET_PASSWORD_TOKEN_MAX_AGE", 1800)
+        )
+        try:
+            unsigned = signer.unsign(token, max_age=max_age)
+            base64_data = unsigned.decode("utf-8")
+            json_data = base64.urlsafe_b64decode(base64_data.encode("utf-8"))
+            data = json.loads(json_data.decode("utf-8"))
+        except (BadSignature, ValueError):
+            return False
+
+        if not isinstance(data, dict):
+            return False
+
+        try:
+            user_id = int(data.get("reset"))
+        except (ValueError, TypeError):
+            return False
+
+        token_hash = data.get("hash")
+        if not token_hash or not isinstance(token_hash, str):
+            return False
+
+        user = db.session.get(User, user_id)
+        if user is None:
+            return False
+
+        current_fingerprint = hashlib.sha256(
+            (user.password_hash or "").encode("utf-8")
+        ).hexdigest()[:16]
+        if not hmac.compare_digest(current_fingerprint, token_hash):
+            return False
+
+        user.password = password
+        db.session.add(user)
+        db.session.commit()
         return True
 
     def gravatar_hash(self):
