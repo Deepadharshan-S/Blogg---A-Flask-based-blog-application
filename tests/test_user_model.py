@@ -1,7 +1,11 @@
+import base64
+import json
 import unittest
 
+from itsdangerous import TimestampSigner
+
 from app import create_app, db
-from app.models import AnonymousUser, Permission, Role, User
+from app.models import RESET_PASSWORD_TOKEN_SALT, AnonymousUser, Permission, Role, User
 
 
 class UserModelTestCase(unittest.TestCase):
@@ -35,6 +39,59 @@ class UserModelTestCase(unittest.TestCase):
         u = User(password="cat")
         u2 = User(password="cat")
         self.assertTrue(u.password_hash != u2.password_hash)
+
+    def test_valid_reset_token_resets_password(self):
+        u = User(email="reset@example.com", username="resetuser", password="OldPassword123!")
+        db.session.add(u)
+        db.session.commit()
+
+        token = u.generate_reset_token()
+        self.assertIsNotNone(token)
+        self.assertTrue(User.reset_password(token, "NewPassword123!"))
+
+        db.session.refresh(u)
+        self.assertTrue(u.verify_password("NewPassword123!"))
+        self.assertFalse(u.verify_password("OldPassword123!"))
+
+    def test_reset_token_single_use(self):
+        u = User(email="singleuse@example.com", username="singleuse", password="OldPassword123!")
+        db.session.add(u)
+        db.session.commit()
+
+        token = u.generate_reset_token()
+        self.assertTrue(User.reset_password(token, "NewPassword123!"))
+
+        # Reusing the same token must fail
+        self.assertFalse(User.reset_password(token, "AnotherPassword123!"))
+        db.session.refresh(u)
+        self.assertTrue(u.verify_password("NewPassword123!"))
+
+    def test_reset_token_invalidated_by_password_change(self):
+        u = User(email="inv@example.com", username="invuser", password="OldPassword123!")
+        db.session.add(u)
+        db.session.commit()
+
+        token = u.generate_reset_token()
+        u.password = "ChangedDirectly123!"
+        db.session.add(u)
+        db.session.commit()
+
+        self.assertFalse(User.reset_password(token, "NewPassword123!"))
+
+    def test_reset_token_nonexistent_user(self):
+        signer = TimestampSigner(self.app.config["SECRET_KEY"], salt=RESET_PASSWORD_TOKEN_SALT)
+        data = {"reset": 999999, "hash": "nonexistenthash1"}
+        json_data = json.dumps(data).encode("utf-8")
+        base64_data = base64.urlsafe_b64encode(json_data).decode("utf-8")
+        signed_token = signer.sign(base64_data.encode("utf-8")).decode("utf-8")
+
+        self.assertFalse(User.reset_password(signed_token, "NewPassword123!"))
+
+    def test_reset_token_invalid_and_malformed(self):
+        self.assertFalse(User.reset_password(None, "NewPassword123!"))
+        self.assertFalse(User.reset_password("", "NewPassword123!"))
+        self.assertFalse(User.reset_password("invalid.token", "NewPassword123!"))
+        self.assertFalse(User.reset_password(12345, "NewPassword123!"))
 
     def test_user_role(self):
         u = User(email="john@example.com", password="cat")

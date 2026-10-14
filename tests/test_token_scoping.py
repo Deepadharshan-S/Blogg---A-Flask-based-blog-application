@@ -84,10 +84,36 @@ class TokenScopingTestCase(unittest.TestCase):
         auth_token = self.user.generate_auth_token()
         self.assertFalse(self.user.change_email(auth_token))
 
+    def test_password_reset_token_isolation(self):
+        """Ensure password reset tokens cannot be substituted for auth, confirmation, or email change, and vice versa."""
+        reset_token = self.user.generate_reset_token()
+
+        # Reset token cannot authenticate API
+        self.assertIsNone(User.verify_auth_token(reset_token))
+
+        # Reset token cannot confirm email
+        self.assertFalse(self.user.confirm(reset_token))
+
+        # Reset token cannot change email
+        self.assertFalse(self.user.change_email(reset_token))
+
+        # Confirmation token cannot reset password
+        confirm_token = self.user.generate_confirmation_token()
+        self.assertFalse(User.reset_password(confirm_token, "NewPassword123!"))
+
+        # API auth token cannot reset password
+        auth_token = self.user.generate_auth_token()
+        self.assertFalse(User.reset_password(auth_token, "NewPassword123!"))
+
+        # Email change token cannot reset password
+        change_token = self.user.generate_email_change_token("new@example.com")
+        self.assertFalse(User.reset_password(change_token, "NewPassword123!"))
+
     def test_expired_tokens_safely_rejected(self):
         """Ensure expired tokens are safely rejected without crashing."""
         confirm_token = self.user.generate_confirmation_token()
         auth_token = self.user.generate_auth_token()
+        reset_token = self.user.generate_reset_token()
 
         # Validate with max_age=-1 to simulate expiration
         self.assertFalse(self.user.confirm(confirm_token, expiration=-1))
@@ -97,6 +123,7 @@ class TokenScopingTestCase(unittest.TestCase):
                 self.user.generate_email_change_token("new@example.com"), expiration=-1
             )
         )
+        self.assertFalse(User.reset_password(reset_token, "NewPassword123!", expiration=-1))
 
     def test_tampered_and_malformed_tokens_safely_rejected(self):
         """Ensure malformed, None, or tampered tokens do not leak secrets or crash."""
@@ -107,12 +134,14 @@ class TokenScopingTestCase(unittest.TestCase):
             "not-a-token",
             "12345",
             self.user.generate_confirmation_token() + "tampered",
+            self.user.generate_reset_token() + "tampered",
         ]
 
         for token in malformed_tokens:
             self.assertFalse(self.user.confirm(token))
             self.assertIsNone(User.verify_auth_token(token))
             self.assertFalse(self.user.change_email(token))
+            self.assertFalse(User.reset_password(token, "NewPassword123!"))
 
     def test_valid_confirmation_flow(self):
         """Ensure legitimate confirmation token successfully confirms user."""

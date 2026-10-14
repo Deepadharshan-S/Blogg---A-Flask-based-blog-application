@@ -287,3 +287,182 @@ class AuthRoutesTestCase(unittest.TestCase):
 
         db.session.refresh(user)
         self.assertEqual(user.email, "new_address@example.com")
+
+    @patch("app.auth.views.send_email")
+    def test_password_reset_request_registered_user(self, mock_send_email):
+        """Ensure requesting password reset for registered email sends reset email."""
+        user = User(
+            email="resetreq@example.com",
+            username="resetreq",
+            password="Password123!",
+            confirmed=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        csrf_token = self._get_csrf_token()
+        res = self.client.post(
+            "/auth/reset",
+            headers={"X-CSRFToken": csrf_token},
+            data={"email": "resetreq@example.com"},
+            follow_redirects=True,
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(
+            "An email with instructions to reset your password has been sent to you.",
+            res.get_data(as_text=True),
+        )
+        mock_send_email.assert_called_once()
+        args, kwargs = mock_send_email.call_args
+        self.assertEqual(args[0], "resetreq@example.com")
+        self.assertEqual(args[1], "Reset Your Password")
+        self.assertEqual(args[2], "auth/email/reset_password")
+        self.assertIn("token", kwargs)
+        self.assertEqual(kwargs["user"], user)
+
+    @patch("app.auth.views.send_email")
+    def test_password_reset_request_unregistered_user_identical_response(self, mock_send_email):
+        """Ensure requesting reset for unregistered email returns identical response (enumeration defense)."""
+        csrf_token = self._get_csrf_token()
+        res = self.client.post(
+            "/auth/reset",
+            headers={"X-CSRFToken": csrf_token},
+            data={"email": "nonexistent@example.com"},
+            follow_redirects=True,
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(
+            "An email with instructions to reset your password has been sent to you.",
+            res.get_data(as_text=True),
+        )
+        mock_send_email.assert_not_called()
+
+    def test_password_reset_get_renders_form(self):
+        """Ensure visiting password reset link with a valid token renders the form."""
+        user = User(
+            email="getreset@example.com",
+            username="getreset",
+            password="Password123!",
+            confirmed=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        reset_token = user.generate_reset_token()
+        res = self.client.get(f"/auth/reset/{reset_token}")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("Reset Password", res.get_data(as_text=True))
+        self.assertIn('name="password"', res.get_data(as_text=True))
+
+    def test_password_reset_post_success_and_replay_prevention(self):
+        """Ensure password reset succeeds, updates password, and prevents token replay."""
+        user = User(
+            email="succreset@example.com",
+            username="succreset",
+            password="OldPassword123!",
+            confirmed=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        reset_token = user.generate_reset_token()
+        csrf_token = self._get_csrf_token()
+
+        # Submit valid new password
+        res = self.client.post(
+            f"/auth/reset/{reset_token}",
+            headers={"X-CSRFToken": csrf_token},
+            data={"password": "NewPassword123!", "password2": "NewPassword123!"},
+            follow_redirects=True,
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("Your password has been updated.", res.get_data(as_text=True))
+
+        db.session.refresh(user)
+        self.assertTrue(user.verify_password("NewPassword123!"))
+        self.assertFalse(user.verify_password("OldPassword123!"))
+
+        # Replay: Submitting the same token again must fail and redirect gracefully
+        replay_token = self._get_csrf_token()
+        res_replay = self.client.post(
+            f"/auth/reset/{reset_token}",
+            headers={"X-CSRFToken": replay_token},
+            data={"password": "AnotherPassword123!", "password2": "AnotherPassword123!"},
+            follow_redirects=True,
+        )
+        self.assertEqual(res_replay.status_code, 200)
+        self.assertIn(
+            "The password reset link is invalid or has expired.", res_replay.get_data(as_text=True)
+        )
+        db.session.refresh(user)
+        self.assertTrue(user.verify_password("NewPassword123!"))
+
+    def test_password_reset_invalid_or_expired_token(self):
+        """Ensure invalid or expired tokens are handled cleanly without HTTP 500."""
+        # 1. GET with invalid token does not crash
+        res_get = self.client.get("/auth/reset/invalid-reset-token")
+        self.assertEqual(res_get.status_code, 200)
+
+        # 2. POST with invalid token safely redirects with error flash
+        csrf_token = self._get_csrf_token()
+        res_post = self.client.post(
+            "/auth/reset/invalid-reset-token",
+            headers={"X-CSRFToken": csrf_token},
+            data={"password": "NewPassword123!", "password2": "NewPassword123!"},
+            follow_redirects=True,
+        )
+        self.assertEqual(res_post.status_code, 200)
+        self.assertIn(
+            "The password reset link is invalid or has expired.", res_post.get_data(as_text=True)
+        )
+
+    def test_password_reset_validation_errors(self):
+        """Ensure mismatched or weak passwords in reset form are rejected without modifying password."""
+        user = User(
+            email="pwval@example.com",
+            username="pwval",
+            password="OriginalPassword123!",
+            confirmed=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        reset_token = user.generate_reset_token()
+        csrf_token = self._get_csrf_token()
+
+        # Mismatched passwords
+        res_mismatch = self.client.post(
+            f"/auth/reset/{reset_token}",
+            headers={"X-CSRFToken": csrf_token},
+            data={"password": "NewPassword123!", "password2": "MismatchPassword123!"},
+        )
+        self.assertEqual(res_mismatch.status_code, 200)
+        self.assertIn("Passwords must match", res_mismatch.get_data(as_text=True))
+
+        # Weak password
+        res_weak = self.client.post(
+            f"/auth/reset/{reset_token}",
+            headers={"X-CSRFToken": csrf_token},
+            data={"password": "short", "password2": "short"},
+        )
+        self.assertEqual(res_weak.status_code, 200)
+        self.assertIn("Password must", res_weak.get_data(as_text=True))
+
+        db.session.refresh(user)
+        self.assertTrue(user.verify_password("OriginalPassword123!"))
+
+    def test_password_reset_csrf_protection(self):
+        """Ensure CSRF is enforced on password reset POST endpoints."""
+        # Reset request POST without CSRF token
+        res_req = self.client.post(
+            "/auth/reset",
+            data={"email": "any@example.com"},
+        )
+        self.assertEqual(res_req.status_code, 400)
+
+        # Reset submit POST without CSRF token
+        res_submit = self.client.post(
+            "/auth/reset/anytoken",
+            data={"password": "NewPassword123!", "password2": "NewPassword123!"},
+        )
+        self.assertEqual(res_submit.status_code, 400)
