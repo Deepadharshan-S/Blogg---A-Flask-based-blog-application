@@ -116,7 +116,12 @@ class User(UserMixin, db.Model):
     member_since = db.Column(db.DateTime(), default=lambda: datetime.now(timezone.utc))
     last_seen = db.Column(db.DateTime(), default=lambda: datetime.now(timezone.utc))
     avatar_hash = db.Column(db.String(32))
-    posts = db.relationship("Post", backref="author", lazy="dynamic")
+    posts = db.relationship(
+        "Post",
+        backref="author",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
     followed = db.relationship(
         "Follow",
         foreign_keys=[Follow.follower_id],
@@ -131,7 +136,12 @@ class User(UserMixin, db.Model):
         lazy="dynamic",
         cascade="all, delete-orphan",
     )
-    comments = db.relationship("Comment", backref="author", lazy="dynamic")
+    comments = db.relationship(
+        "Comment",
+        backref="author",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
     liked_posts = db.relationship(
         "PostLike",
         foreign_keys=[PostLike.user_id],
@@ -413,7 +423,12 @@ class Post(db.Model):
     body_html = db.Column(db.Text)
     timestamp = db.Column(db.DateTime, index=True, default=lambda: datetime.now(timezone.utc))
     author_id = db.Column(db.Integer, db.ForeignKey("users.id"), index=True)
-    comments = db.relationship("Comment", backref="post", lazy="dynamic")
+    comments = db.relationship(
+        "Comment",
+        backref="post",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
     likes = db.relationship(
         "PostLike",
         foreign_keys=[PostLike.post_id],

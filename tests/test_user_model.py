@@ -5,7 +5,15 @@ import unittest
 from itsdangerous import TimestampSigner
 
 from app import create_app, db
-from app.models import RESET_PASSWORD_TOKEN_SALT, AnonymousUser, Permission, Role, User
+from app.models import (
+    RESET_PASSWORD_TOKEN_SALT,
+    AnonymousUser,
+    Comment,
+    Permission,
+    Post,
+    Role,
+    User,
+)
 
 
 class UserModelTestCase(unittest.TestCase):
@@ -108,3 +116,47 @@ class UserModelTestCase(unittest.TestCase):
         self.assertFalse(u.can(Permission.WRITE))
         self.assertFalse(u.can(Permission.MODERATE))
         self.assertFalse(u.can(Permission.ADMIN))
+
+    def test_user_cascade_deletion(self):
+        """Ensure deleting a user cascades to their posts and comments."""
+        u1 = User(email="author@example.com", username="author", password="Password123!")
+        u2 = User(email="commenter@example.com", username="commenter", password="Password123!")
+        db.session.add_all([u1, u2])
+        db.session.commit()
+
+        p = Post(body="Post by author", author=u1)
+        db.session.add(p)
+        db.session.commit()
+
+        c1 = Comment(body="Comment by author", post=p, author=u1)
+        c2 = Comment(body="Comment by commenter", post=p, author=u2)
+        db.session.add_all([c1, c2])
+        db.session.commit()
+
+        db.session.delete(u1)
+        db.session.commit()
+
+        self.assertIsNone(db.session.get(User, u1.id))
+        self.assertIsNone(db.session.get(Post, p.id))
+        self.assertIsNone(db.session.get(Comment, c1.id))
+        self.assertIsNone(db.session.get(Comment, c2.id))
+
+    def test_post_cascade_deletion(self):
+        """Ensure deleting a post cascades to its comments."""
+        u = User(email="postauthor@example.com", username="postauthor", password="Password123!")
+        db.session.add(u)
+        db.session.commit()
+
+        p = Post(body="Post to be deleted", author=u)
+        db.session.add(p)
+        db.session.commit()
+
+        c = Comment(body="Comment on post", post=p, author=u)
+        db.session.add(c)
+        db.session.commit()
+
+        db.session.delete(p)
+        db.session.commit()
+
+        self.assertIsNone(db.session.get(Post, p.id))
+        self.assertIsNone(db.session.get(Comment, c.id))
