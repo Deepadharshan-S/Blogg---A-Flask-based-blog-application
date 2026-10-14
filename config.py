@@ -42,9 +42,18 @@ class TestingConfig(Config):
 
 
 class ProductionConfig(Config):
+    SECRET_KEY = os.environ.get("SECRET_KEY")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL") or "sqlite:///" + os.path.join(
         basedir, "data.sqlite"
     )
+
+    @classmethod
+    def init_app(cls, app):
+        Config.init_app(app)
+        secret_key = os.environ.get("SECRET_KEY")
+        if not secret_key:
+            raise RuntimeError("SECRET_KEY must be set in production")
+        app.config["SECRET_KEY"] = secret_key
 
 
 config = {
