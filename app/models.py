@@ -6,11 +6,15 @@ from datetime import datetime, timezone
 import bleach
 from flask import current_app, request
 from flask_login import AnonymousUserMixin, UserMixin
-from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
+from itsdangerous import BadSignature, TimestampSigner
 from markdown import markdown
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db, login_manager
+
+CONFIRMATION_TOKEN_SALT = "confirmation-token"
+AUTH_TOKEN_SALT = "api-auth-token"
+CHANGE_EMAIL_TOKEN_SALT = "change-email-token"
 
 
 class Permission:
@@ -179,14 +183,12 @@ class User(UserMixin, db.Model):
         db.session.commit()
 
     def generate_confirmation_token(self, expiration=3600):
-        # Create a TimestampSigner instance with the app's secret key
-        signer = TimestampSigner(current_app.config["SECRET_KEY"])
-        # Generate a signed token with the user ID and expiration time
-        token = signer.sign(str(self.id))  # Convert the user ID to string
-        return token.decode("utf-8")  # Return as string
+        signer = TimestampSigner(current_app.config["SECRET_KEY"], salt=CONFIRMATION_TOKEN_SALT)
+        token = signer.sign(str(self.id))
+        return token.decode("utf-8")
 
     def generate_email_change_token(self, new_email, expiration=3600):
-        signer = TimestampSigner(current_app.config["SECRET_KEY"])
+        signer = TimestampSigner(current_app.config["SECRET_KEY"], salt=CHANGE_EMAIL_TOKEN_SALT)
 
         # Prepare the payload
         data = {"change_email": self.id, "new_email": new_email}
@@ -199,7 +201,9 @@ class User(UserMixin, db.Model):
         return signed_value.decode("utf-8")
 
     def change_email(self, token, expiration=3600):
-        signer = TimestampSigner(current_app.config["SECRET_KEY"])
+        if not token:
+            return False
+        signer = TimestampSigner(current_app.config["SECRET_KEY"], salt=CHANGE_EMAIL_TOKEN_SALT)
 
         try:
             # Unsign token with expiration
@@ -207,7 +211,7 @@ class User(UserMixin, db.Model):
             base64_data = unsigned.decode("utf-8")
             json_data = base64.urlsafe_b64decode(base64_data.encode("utf-8"))
             data = json.loads(json_data.decode("utf-8"))
-        except (SignatureExpired, BadSignature, Exception):
+        except (BadSignature, ValueError):
             return False
 
         if data.get("change_email") != self.id:
@@ -225,20 +229,20 @@ class User(UserMixin, db.Model):
         db.session.add(self)
         return True
 
-    def confirm(self, token):
-        # Create a TimestampSigner instance with the app's secret key
-        signer = TimestampSigner(current_app.config["SECRET_KEY"])
+    def confirm(self, token, expiration=3600):
+        if not token:
+            return False
+        signer = TimestampSigner(current_app.config["SECRET_KEY"], salt=CONFIRMATION_TOKEN_SALT)
         try:
-            # Attempt to unsign and validate the token with expiration time
-            user_id = signer.unsign(token, max_age=3600).decode("utf-8")  # 1 hour expiration
-        except Exception:
-            return False  # Invalid or expired token
-
-        if user_id != str(self.id):  # Compare the user ID from the token with the current user
+            user_id = signer.unsign(token, max_age=expiration).decode("utf-8")
+        except (BadSignature, ValueError):
             return False
 
-        self.confirmed = True  # Mark the user as confirmed
-        db.session.add(self)  # Add the user to the session
+        if user_id != str(self.id):
+            return False
+
+        self.confirmed = True
+        db.session.add(self)
         return True
 
     def gravatar_hash(self):
@@ -298,17 +302,19 @@ class User(UserMixin, db.Model):
         return self.liked_posts.filter_by(post_id=post.id).first() is not None
 
     def generate_auth_token(self, expiration=3600):
-        signer = TimestampSigner(current_app.config["SECRET_KEY"])
+        signer = TimestampSigner(current_app.config["SECRET_KEY"], salt=AUTH_TOKEN_SALT)
         token = signer.sign(str(self.id))
         return token.decode("utf-8")
 
     @staticmethod
     def verify_auth_token(token, max_age=3600):
-        signer = TimestampSigner(current_app.config["SECRET_KEY"])
+        if not token:
+            return None
+        signer = TimestampSigner(current_app.config["SECRET_KEY"], salt=AUTH_TOKEN_SALT)
         try:
             data = signer.unsign(token, max_age=max_age)
             user_id = int(data.decode("utf-8"))
-        except Exception:
+        except (BadSignature, ValueError):
             return None
         return db.session.get(User, user_id)
 
