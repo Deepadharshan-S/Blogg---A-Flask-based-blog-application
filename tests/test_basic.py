@@ -59,3 +59,18 @@ class BasicsTestCase(unittest.TestCase):
         with patch("app.email.mail.send") as mock_send:
             send_async_email(self.app, msg)
             mock_send.assert_called_once_with(msg)
+
+    def test_logging_handler_max_bytes(self):
+        """Ensure RotatingFileHandler uses a 10MB threshold."""
+        from logging.handlers import RotatingFileHandler
+
+        rotating_handlers = [
+            h for h in self.app.logger.handlers if isinstance(h, RotatingFileHandler)
+        ]
+        self.assertTrue(len(rotating_handlers) > 0)
+        self.assertEqual(rotating_handlers[0].maxBytes, 10 * 1024 * 1024)
+
+    def test_ratelimit_storage_uri_configuration(self):
+        """Ensure RATELIMIT_STORAGE_URI is configured on app."""
+        self.assertIn("RATELIMIT_STORAGE_URI", self.app.config)
+        self.assertEqual(self.app.config["RATELIMIT_STORAGE_URI"], "memory://")

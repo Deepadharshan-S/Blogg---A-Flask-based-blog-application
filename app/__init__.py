@@ -27,7 +27,7 @@ csrf = CSRFProtect()
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["500 per day", "100 per hour"],
-    storage_uri="memory://",
+    storage_uri=os.environ.get("RATELIMIT_STORAGE_URI", "memory://"),
 )
 
 
@@ -70,7 +70,7 @@ def create_app(config_name):
 
     if not os.path.exists("logs"):
         os.mkdir("logs")
-    file_handler = RotatingFileHandler("logs/blogg.log", maxBytes=10240, backupCount=10)
+    file_handler = RotatingFileHandler("logs/blogg.log", maxBytes=10 * 1024 * 1024, backupCount=10)
     file_handler.setFormatter(
         logging.Formatter("%(asctime)s [%(levelname)s] in %(module)s: %(message)s")
     )
