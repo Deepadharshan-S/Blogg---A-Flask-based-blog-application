@@ -24,6 +24,7 @@
       <div class="post-footer">
         {% if current_user.is_authenticated %}
         <form action="{{ url_for('.like_post', id=post.id) }}" method="post" class="like-form" style="display:inline-block;" data-post-id="{{ post.id }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn-like {% if current_user.has_liked_post(post) %}liked{% endif %}" title="Like this post">
             <span class="like-icon">♥</span>
             <span class="like-count">{{ post.likes.count() }}</span>

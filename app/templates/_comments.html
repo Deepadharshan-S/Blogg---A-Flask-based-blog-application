@@ -96,9 +96,15 @@
             {% if moderate %}
             <div class="moderation-buttons">
                 {% if comment.disabled %}
-                <a class="btn btn-default btn-xs" href="{{ url_for('.moderate_enable', id=comment.id, page=page) }}">Enable</a>
+                <form action="{{ url_for('.moderate_enable', id=comment.id, page=page) }}" method="post" style="display:inline-block;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-default btn-xs">Enable</button>
+                </form>
                 {% else %}
-                <a class="btn btn-danger btn-xs" href="{{ url_for('.moderate_disable', id=comment.id, page=page) }}">Disable</a>
+                <form action="{{ url_for('.moderate_disable', id=comment.id, page=page) }}" method="post" style="display:inline-block;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger btn-xs">Disable</button>
+                </form>
                 {% endif %}
             </div>
             {% endif %}

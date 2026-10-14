@@ -11,6 +11,7 @@ from flask_mail import Mail
 from flask_moment import Moment
 from flask_pagedown import PageDown
 from flask_sqlalchemy import SQLAlchemy
+from flask_wtf.csrf import CSRFProtect
 
 from config import config
 
@@ -22,6 +23,7 @@ mail = Mail()
 moment = Moment()
 db = SQLAlchemy()
 pagedown = PageDown()
+csrf = CSRFProtect()
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["500 per day", "100 per hour"],
@@ -40,6 +42,7 @@ def create_app(config_name):
     db.init_app(app)
     login_manager.init_app(app)
     pagedown.init_app(app)
+    csrf.init_app(app)
     limiter.init_app(app)
 
     # Register blueprints
@@ -53,6 +56,7 @@ def create_app(config_name):
 
     from .api import api as api_blueprint
 
+    csrf.exempt(api_blueprint)
     app.register_blueprint(api_blueprint, url_prefix="/api/v1")
 
     # Security Headers

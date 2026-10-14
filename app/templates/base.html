@@ -13,6 +13,7 @@
 
 {% block head %}
 {{ super() }}
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
 <link rel="alternate icon" href="{{ url_for('static', filename='favicon.svg') }}">
 <script>
@@ -139,11 +140,15 @@
         e.preventDefault();
         var btn = form.querySelector('.btn-like');
         var countEl = form.querySelector('.like-count');
+        var metaTag = document.querySelector('meta[name="csrf-token"]');
+        var formInput = form.querySelector('input[name="csrf_token"]');
+        var csrfToken = (metaTag && metaTag.getAttribute('content')) || (formInput && formInput.value) || '';
         fetch(form.action, {
           method: 'POST',
           headers: {
             'X-Requested-With': 'XMLHttpRequest',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
           }
         })
         .then(function(res) { return res.json(); })

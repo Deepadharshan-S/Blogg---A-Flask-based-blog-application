@@ -80,13 +80,13 @@ def edit_profile():
 @login_required
 @admin_required
 def edit_profile_admin(id):
-    user = User.query.get_or_404(id)
+    user = db.get_or_404(User, id)
     form = EditProfileAdminForm(user=user)
     if form.validate_on_submit():
         user.email = form.email.data
         user.username = form.username.data
         user.confirmed = form.confirmed.data
-        user.role = Role.query.get(form.role.data)
+        user.role = db.session.get(Role, form.role.data)
         user.name = form.name.data
         user.location = form.location.data
         user.about_me = form.about_me.data
@@ -110,7 +110,7 @@ def edit_profile_admin(id):
 
 @main.route("/post/<int:id>", methods=["GET", "POST"])
 def post(id):
-    post = Post.query.options(joinedload(Post.author)).get_or_404(id)
+    post = db.get_or_404(Post, id, options=[joinedload(Post.author)])
     form = CommentForm()
     if form.validate_on_submit():
         comment = Comment(body=form.body.data, post=post, author=current_user._get_current_object())
@@ -140,7 +140,7 @@ def post(id):
 @main.route("/edit/<int:id>", methods=["GET", "POST"])
 @login_required
 def edit(id):
-    post = Post.query.get_or_404(id)
+    post = db.get_or_404(Post, id)
     if current_user != post.author and not current_user.can(Permission.ADMIN):
         current_app.logger.warning(
             f"Unauthorized edit attempt by {current_user.email} on post {post.id}"
@@ -178,7 +178,7 @@ def followed_by(username):
     )
 
 
-@main.route("/follow/<username>")
+@main.route("/follow/<username>", methods=["POST"])
 @login_required
 @permission_required(Permission.FOLLOW)
 def follow(username):
@@ -196,7 +196,7 @@ def follow(username):
     return redirect(url_for(".user", username=username))
 
 
-@main.route("/unfollow/<username>")
+@main.route("/unfollow/<username>", methods=["POST"])
 @login_required
 @permission_required(Permission.FOLLOW)
 def unfollow(username):
@@ -267,30 +267,32 @@ def moderate():
     return render_template("moderate.html", comments=comments, pagination=pagination, page=page)
 
 
-@main.route("/moderate/enable/<int:id>")
+@main.route("/moderate/enable/<int:id>", methods=["POST"])
 @login_required
 @permission_required(Permission.MODERATE)
 def moderate_enable(id):
-    comment = Comment.query.get_or_404(id)
+    comment = db.get_or_404(Comment, id)
     comment.disabled = False
-    db.session.commit()  # <-- Fix: Commit changes
-    return redirect(url_for(".moderate", page=request.args.get("page", 1, type=int)))
+    db.session.commit()
+    page = request.values.get("page", 1, type=int)
+    return redirect(url_for(".moderate", page=page))
 
 
-@main.route("/moderate/disable/<int:id>")
+@main.route("/moderate/disable/<int:id>", methods=["POST"])
 @login_required
 @permission_required(Permission.MODERATE)
 def moderate_disable(id):
-    comment = Comment.query.get_or_404(id)
+    comment = db.get_or_404(Comment, id)
     comment.disabled = True
-    db.session.commit()  # <-- Fix: Commit changes
-    return redirect(url_for(".moderate", page=request.args.get("page", 1, type=int)))
+    db.session.commit()
+    page = request.values.get("page", 1, type=int)
+    return redirect(url_for(".moderate", page=page))
 
 
 @main.route("/like/<int:id>", methods=["POST"])
 @login_required
 def like_post(id):
-    post = Post.query.get_or_404(id)
+    post = db.get_or_404(Post, id)
     if current_user.has_liked_post(post):
         current_user.unlike_post(post)
         liked = False
