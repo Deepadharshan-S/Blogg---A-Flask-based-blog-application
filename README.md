@@ -57,7 +57,7 @@ Clone the repository and install all dependencies:
 
 ```bash
 git clone <repository-url>
-cd blogg
+cd Blogg
 
 # Install dependencies into virtual environment using uv
 uv sync
@@ -133,7 +133,7 @@ uv run flask lint-fix
 ## Project Structure
 
 ```plaintext
-blogg/
+Blogg/
 ├── app/                       # Core application factory & blueprints
 │   ├── api/                   # Headless REST API v1 endpoints
 │   ├── auth/                  # Authentication blueprint (routes, forms)

@@ -1,5 +1,5 @@
 [project]
-name = "blogg"
+name = "Blogg"
 version = "0.1.0"
 description = "A full-featured blogging and social networking web application built with Flask and SQLAlchemy."
 readme = "README.md"
