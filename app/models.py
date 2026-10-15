@@ -9,6 +9,8 @@ from flask import current_app, request
 from flask_login import AnonymousUserMixin, UserMixin
 from itsdangerous import BadSignature, TimestampSigner
 from markdown import markdown
+from sqlalchemy import event
+from sqlalchemy.orm import validates
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db, login_manager
@@ -90,8 +92,12 @@ class Role(db.Model):
 
 class Follow(db.Model):
     __tablename__ = "follows"
-    follower_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True)
-    followed_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True)
+    follower_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    followed_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
@@ -150,16 +156,23 @@ class User(UserMixin, db.Model):
         cascade="all, delete-orphan",
     )
 
+    @validates("email")
+    def validate_email_field(self, key, address):
+        if address is not None:
+            return address.strip().lower()
+        return address
+
     def __init__(self, **kwargs):
         super(User, self).__init__(**kwargs)
         if self.role is None:
-            if self.email == current_app.config["BLOGG_ADMIN"]:
-                self.role = Role.query.filter_by(name="Administrator").first()
-            if self.role is None:
-                self.role = Role.query.filter_by(default=True).first()
+            with db.session.no_autoflush:
+                admin_email = current_app.config.get("BLOGG_ADMIN")
+                if admin_email and self.email == admin_email.strip().lower():
+                    self.role = Role.query.filter_by(name="Administrator").first()
+                if self.role is None:
+                    self.role = Role.query.filter_by(default=True).first()
         if self.email is not None and self.avatar_hash is None:
             self.avatar_hash = self.gravatar_hash()
-        self.follow(self)
 
     @staticmethod
     def add_self_follows():
@@ -167,7 +180,7 @@ class User(UserMixin, db.Model):
             if not user.is_following(user):
                 user.follow(user)
                 db.session.add(user)
-                db.session.commit()
+        db.session.commit()
 
     @property
     def password(self):
@@ -201,7 +214,7 @@ class User(UserMixin, db.Model):
 
     def generate_email_change_token(self, new_email, expiration=3600):
         signer = TimestampSigner(current_app.config["SECRET_KEY"], salt=CHANGE_EMAIL_TOKEN_SALT)
-
+        new_email = (new_email or "").strip().lower()
         # Prepare the payload
         data = {"change_email": self.id, "new_email": new_email}
         # Encode data to base64 JSON string
@@ -232,6 +245,7 @@ class User(UserMixin, db.Model):
         new_email = data.get("new_email")
         if not new_email:
             return False
+        new_email = new_email.strip().lower()
 
         if self.query.filter_by(email=new_email).first() is not None:
             return False
@@ -329,13 +343,11 @@ class User(UserMixin, db.Model):
         if not self.is_following(user):
             f = Follow(follower=self, followed=user)
             db.session.add(f)
-            db.session.commit()  # Commit the change
 
     def unfollow(self, user):
         f = self.followed.filter_by(followed_id=user.id).first()
         if f:
             db.session.delete(f)
-            db.session.commit()  # Commit the change
 
     def is_following(self, user):
         if user.id is None:
@@ -370,20 +382,49 @@ class User(UserMixin, db.Model):
 
     def generate_auth_token(self, expiration=3600):
         signer = TimestampSigner(current_app.config["SECRET_KEY"], salt=AUTH_TOKEN_SALT)
-        token = signer.sign(str(self.id))
-        return token.decode("utf-8")
+        pw_fingerprint = hashlib.sha256((self.password_hash or "").encode("utf-8")).hexdigest()[:16]
+        data = {"auth": self.id, "hash": pw_fingerprint}
+        json_data = json.dumps(data).encode("utf-8")
+        base64_data = base64.urlsafe_b64encode(json_data).decode("utf-8")
+        signed_value = signer.sign(base64_data.encode("utf-8"))
+        return signed_value.decode("utf-8")
 
     @staticmethod
     def verify_auth_token(token, max_age=3600):
-        if not token:
+        if not token or not isinstance(token, (str, bytes)):
             return None
         signer = TimestampSigner(current_app.config["SECRET_KEY"], salt=AUTH_TOKEN_SALT)
         try:
-            data = signer.unsign(token, max_age=max_age)
-            user_id = int(data.decode("utf-8"))
-        except (BadSignature, ValueError):
+            unsigned = signer.unsign(token, max_age=max_age)
+            base64_data = unsigned.decode("utf-8")
+            json_data = base64.urlsafe_b64decode(base64_data.encode("utf-8"))
+            data = json.loads(json_data.decode("utf-8"))
+        except (BadSignature, ValueError, Exception):
             return None
-        return db.session.get(User, user_id)
+
+        if not isinstance(data, dict):
+            return None
+
+        try:
+            user_id = int(data.get("auth"))
+        except (ValueError, TypeError):
+            return None
+
+        token_hash = data.get("hash")
+        if not token_hash or not isinstance(token_hash, str):
+            return None
+
+        user = db.session.get(User, user_id)
+        if user is None:
+            return None
+
+        current_fingerprint = hashlib.sha256(
+            (user.password_hash or "").encode("utf-8")
+        ).hexdigest()[:16]
+        if not hmac.compare_digest(current_fingerprint, token_hash):
+            return None
+
+        return user
 
     def to_json(self):
         return {
@@ -405,6 +446,18 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 
+@event.listens_for(User, "after_insert")
+def _auto_self_follow(mapper, connection, target):
+    """Automatically establish self-follow relationship when a user is persisted."""
+    connection.execute(
+        Follow.__table__.insert().values(
+            follower_id=target.id,
+            followed_id=target.id,
+            timestamp=datetime.now(timezone.utc),
+        )
+    )
+
+
 class AnonymousUser(AnonymousUserMixin):
     def can(self, permissions):
         return False
@@ -422,7 +475,7 @@ class Post(db.Model):
     body = db.Column(db.Text)
     body_html = db.Column(db.Text)
     timestamp = db.Column(db.DateTime, index=True, default=lambda: datetime.now(timezone.utc))
-    author_id = db.Column(db.Integer, db.ForeignKey("users.id"), index=True)
+    author_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), index=True)
     comments = db.relationship(
         "Comment",
         backref="post",
@@ -496,8 +549,8 @@ class Comment(db.Model):
     body_html = db.Column(db.Text)
     timestamp = db.Column(db.DateTime, index=True, default=lambda: datetime.now(timezone.utc))
     disabled = db.Column(db.Boolean)
-    author_id = db.Column(db.Integer, db.ForeignKey("users.id"), index=True)
-    post_id = db.Column(db.Integer, db.ForeignKey("posts.id"), index=True)
+    author_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("posts.id", ondelete="CASCADE"), index=True)
 
     def to_json(self):
         return {

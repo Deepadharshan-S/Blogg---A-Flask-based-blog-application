@@ -149,3 +149,44 @@ class TokenScopingTestCase(unittest.TestCase):
         token = self.user.generate_confirmation_token()
         self.assertTrue(self.user.confirm(token))
         self.assertTrue(self.user.confirmed)
+
+    def test_api_token_invalidated_by_password_change(self):
+        """Ensure API auth tokens become invalid immediately upon password change or reset."""
+        self.user.confirmed = True
+        db.session.commit()
+
+        token = self.user.generate_auth_token()
+        self.assertIsNotNone(User.verify_auth_token(token))
+
+        # 1. Verify working token against API
+        res_before = self.client.post(
+            "/api/v1/posts",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"body": "Post created with active token"},
+        )
+        self.assertEqual(res_before.status_code, 201)
+
+        # 2. Change password
+        self.user.password = "BrandNewPassword123!"
+        db.session.add(self.user)
+        db.session.commit()
+
+        # 3. Model level: verify old token fails
+        self.assertIsNone(User.verify_auth_token(token))
+
+        # 4. API level: request with old token is rejected with 401 Unauthorized
+        res_after = self.client.post(
+            "/api/v1/posts",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"body": "Post created with invalidated token"},
+        )
+        self.assertEqual(res_after.status_code, 401)
+
+        # 5. New token generated with updated password functions properly
+        new_token = self.user.generate_auth_token()
+        res_new = self.client.post(
+            "/api/v1/posts",
+            headers={"Authorization": f"Bearer {new_token}"},
+            json={"body": "Post created with new token"},
+        )
+        self.assertEqual(res_new.status_code, 201)
