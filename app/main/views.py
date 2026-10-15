@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from flask import (
     abort,
     current_app,
@@ -16,6 +18,24 @@ from ..decorators import admin_required, permission_required
 from ..models import Comment, Permission, Post, Role, User
 from . import main
 from .forms import CommentForm, EditProfileAdminForm, EditProfileForm, PostForm
+
+
+def is_safe_redirect_url(target):
+    """Validate that a redirect target is a safe relative path or same-origin URL."""
+    if not target or not isinstance(target, str):
+        return False
+    target = target.strip()
+    if target.startswith("//") or target.startswith("/\\") or target.startswith("\\"):
+        return False
+    try:
+        parsed = urlsplit(target)
+    except ValueError:
+        return False
+    if not parsed.netloc and not parsed.scheme and target.startswith("/"):
+        return True
+    if parsed.scheme in ("http", "https") and parsed.netloc == request.host:
+        return True
+    return False
 
 
 @main.route("/", methods=["GET", "POST"])
@@ -113,6 +133,11 @@ def post(id):
     post = db.get_or_404(Post, id, options=[joinedload(Post.author)])
     form = CommentForm()
     if form.validate_on_submit():
+        if not current_user.is_authenticated:
+            flash("You must be logged in to comment.")
+            return redirect(url_for("auth.login", next=url_for(".post", id=post.id)))
+        if not current_user.can(Permission.COMMENT):
+            abort(403)
         comment = Comment(body=form.body.data, post=post, author=current_user._get_current_object())
         db.session.add(comment)
         db.session.commit()
@@ -305,7 +330,9 @@ def like_post(id):
         return {"liked": liked, "likes_count": post.likes.count()}
 
     flash("Liked post!" if liked else "Unliked post.")
-    next_url = request.referrer or url_for(".index")
+    next_url = request.referrer
+    if not next_url or not is_safe_redirect_url(next_url):
+        next_url = url_for(".index")
     return redirect(next_url)
 
 

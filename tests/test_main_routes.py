@@ -2,7 +2,7 @@ import re
 import unittest
 
 from app import create_app, db
-from app.models import Comment, Post, Role, User
+from app.models import Comment, Permission, Post, Role, User
 
 
 class MainRoutesTestCase(unittest.TestCase):
@@ -266,3 +266,121 @@ class MainRoutesTestCase(unittest.TestCase):
         res_search_user = self.client.get(f"/search?q={self.author.username}")
         self.assertEqual(res_search_user.status_code, 200)
         self.assertIn(self.author.username, res_search_user.get_data(as_text=True))
+
+    def test_comment_authorization_and_anonymous_submission(self):
+        """Ensure anonymous comment submissions do not crash and COMMENT permission is enforced."""
+        post = Post(body="Post for comment permission tests", author=self.author)
+        db.session.add(post)
+        db.session.commit()
+
+        # 1. Anonymous GET works cleanly
+        res_get = self.client.get(f"/post/{post.id}")
+        self.assertEqual(res_get.status_code, 200)
+
+        # 2. Anonymous POST is redirected to login without 500 error or database insertion
+        csrf_token = self._get_csrf_token()
+        res_anon_post = self.client.post(
+            f"/post/{post.id}",
+            headers={"X-CSRFToken": csrf_token},
+            data={"body": "Anonymous comment"},
+            follow_redirects=False,
+        )
+        self.assertEqual(res_anon_post.status_code, 302)
+        self.assertIn("/auth/login", res_anon_post.headers.get("Location", ""))
+        self.assertEqual(Comment.query.filter_by(post=post).count(), 0)
+
+        # 3. Authenticated user without COMMENT permission receives 403 Forbidden
+        muted_role = Role(name="MutedUser", permissions=Permission.FOLLOW)
+        db.session.add(muted_role)
+        muted_user = User(
+            email="muted@example.com",
+            username="muteduser",
+            password="Password123!",
+            confirmed=True,
+            role=muted_role,
+        )
+        db.session.add(muted_user)
+        db.session.commit()
+
+        self._login(muted_user.email)
+        csrf_token = self._get_csrf_token()
+        res_muted_post = self.client.post(
+            f"/post/{post.id}",
+            headers={"X-CSRFToken": csrf_token},
+            data={"body": "Comment from muted user"},
+            follow_redirects=False,
+        )
+        self.assertEqual(res_muted_post.status_code, 403)
+        self.assertEqual(Comment.query.filter_by(post=post).count(), 0)
+
+        # 4. Invalid form submission by authenticated user does not create a comment
+        self._login(self.reader.email)
+        csrf_token = self._get_csrf_token()
+        res_invalid = self.client.post(
+            f"/post/{post.id}",
+            headers={"X-CSRFToken": csrf_token},
+            data={"body": ""},
+            follow_redirects=False,
+        )
+        self.assertEqual(res_invalid.status_code, 200)
+        self.assertEqual(Comment.query.filter_by(post=post).count(), 0)
+
+        # 5. Authenticated user with COMMENT permission succeeds
+        csrf_token = self._get_csrf_token()
+        res_valid = self.client.post(
+            f"/post/{post.id}",
+            headers={"X-CSRFToken": csrf_token},
+            data={"body": "Valid authorized comment"},
+            follow_redirects=True,
+        )
+        self.assertEqual(res_valid.status_code, 200)
+        self.assertEqual(Comment.query.filter_by(post=post).count(), 1)
+        self.assertEqual(Comment.query.filter_by(post=post).first().author, self.reader)
+
+    def test_like_route_referer_validation(self):
+        """BLOGG-SEC-008: Ensure like route validates Referer and does not allow open redirects."""
+        post = Post(body="Post for like referer testing", author=self.author)
+        db.session.add(post)
+        db.session.commit()
+
+        self._login(self.reader.email)
+        csrf_token = self._get_csrf_token()
+
+        # 1. External Referer rejected, falls back to index
+        res_ext = self.client.post(
+            f"/like/{post.id}",
+            headers={"X-CSRFToken": csrf_token, "Referer": "https://attacker.example/malicious"},
+            follow_redirects=False,
+        )
+        self.assertEqual(res_ext.status_code, 302)
+        self.assertEqual(res_ext.headers.get("Location"), "/")
+
+        # 2. Protocol-relative Referer rejected
+        csrf_token = self._get_csrf_token()
+        res_proto = self.client.post(
+            f"/like/{post.id}",
+            headers={"X-CSRFToken": csrf_token, "Referer": "//attacker.example/path"},
+            follow_redirects=False,
+        )
+        self.assertEqual(res_proto.status_code, 302)
+        self.assertEqual(res_proto.headers.get("Location"), "/")
+
+        # 3. Absent Referer falls back to index
+        csrf_token = self._get_csrf_token()
+        res_none = self.client.post(
+            f"/like/{post.id}",
+            headers={"X-CSRFToken": csrf_token},
+            follow_redirects=False,
+        )
+        self.assertEqual(res_none.status_code, 302)
+        self.assertEqual(res_none.headers.get("Location"), "/")
+
+        # 4. Valid same-origin Referer preserved
+        csrf_token = self._get_csrf_token()
+        res_local = self.client.post(
+            f"/like/{post.id}",
+            headers={"X-CSRFToken": csrf_token, "Referer": f"http://localhost/post/{post.id}"},
+            follow_redirects=False,
+        )
+        self.assertEqual(res_local.status_code, 302)
+        self.assertEqual(res_local.headers.get("Location"), f"http://localhost/post/{post.id}")

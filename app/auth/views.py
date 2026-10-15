@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from flask import current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
@@ -15,19 +17,37 @@ from .forms import (
 )
 
 
+def is_safe_url(target):
+    """Validate that a redirect target is a safe local relative path."""
+    if not target or not isinstance(target, str):
+        return False
+    target = target.strip()
+    if target.startswith("//") or target.startswith("/\\") or target.startswith("\\"):
+        return False
+    try:
+        parsed = urlsplit(target)
+    except ValueError:
+        return False
+    if parsed.scheme or parsed.netloc:
+        return False
+    if not target.startswith("/"):
+        return False
+    return True
+
+
 @auth.route("/login", methods=["GET", "POST"])
 @limiter.limit("5 per minute")
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
+        user = User.query.filter_by(email=form.email.data.strip().lower()).first()
         if user is not None and user.verify_password(form.password.data):
             login_user(user, form.remember_me.data)
             current_app.logger.info(f"User logged in: {user.email}")  # Log successful login
-            next = request.args.get("next")
-            if next is None or not next.startswith("/"):
-                next = url_for("main.index")
-            return redirect(next)
+            next_url = request.args.get("next")
+            if not is_safe_url(next_url):
+                next_url = url_for("main.index")
+            return redirect(next_url)
         current_app.logger.warning(f"Failed login attempt: {form.email.data}")
         flash("Invalid username or password.")
     return render_template("auth/login.html", form=form)
@@ -74,10 +94,15 @@ def logout():
 
 
 @auth.route("/register", methods=["GET", "POST"])
+@limiter.limit("10 per hour")
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
-        user = User(email=form.email.data, username=form.username.data, password=form.password.data)
+        user = User(
+            email=form.email.data.strip().lower(),
+            username=form.username.data,
+            password=form.password.data,
+        )
         db.session.add(user)
         db.session.commit()
         token = user.generate_confirmation_token()
@@ -90,6 +115,7 @@ def register():
 
 @auth.route("/confirm")
 @login_required
+@limiter.limit("5 per hour")
 def resend_confirmation():
     token = current_user.generate_confirmation_token()
     send_email(
@@ -120,12 +146,13 @@ def change_password():
 
 
 @auth.route("/reset", methods=["GET", "POST"])
+@limiter.limit("5 per hour")
 def password_reset_request():
     if not current_user.is_anonymous:
         return redirect(url_for("main.index"))
     form = PasswordResetRequestForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data.lower()).first()
+        user = User.query.filter_by(email=form.email.data.strip().lower()).first()
         if user:
             token = user.generate_reset_token()
             send_email(
@@ -162,7 +189,7 @@ def change_email_request():
     form = ChangeEmailForm()
     if form.validate_on_submit():
         if current_user.verify_password(form.password.data):
-            new_email = form.email.data.lower()
+            new_email = form.email.data.strip().lower()
             token = current_user.generate_email_change_token(new_email)
             send_email(
                 new_email,

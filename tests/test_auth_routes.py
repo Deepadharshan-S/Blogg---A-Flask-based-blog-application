@@ -2,7 +2,8 @@ import re
 import unittest
 from unittest.mock import patch
 
-from app import create_app, db
+from app import create_app, db, limiter
+from app.auth.views import is_safe_url
 from app.models import Role, User
 
 
@@ -13,6 +14,7 @@ class AuthRoutesTestCase(unittest.TestCase):
         self.app_context.push()
         db.create_all()
         Role.insert_roles()
+        limiter.reset()
         self.client = self.app.test_client()
 
     def tearDown(self):
@@ -21,7 +23,7 @@ class AuthRoutesTestCase(unittest.TestCase):
         self.app_context.pop()
 
     def _get_csrf_token(self):
-        response = self.client.get("/auth/login")
+        response = self.client.get("/")
         match = re.search(
             r'<meta name="csrf-token" content="([^"]+)">', response.get_data(as_text=True)
         )
@@ -150,6 +152,107 @@ class AuthRoutesTestCase(unittest.TestCase):
         res_logout = self.client.get("/auth/logout", follow_redirects=True)
         self.assertEqual(res_logout.status_code, 200)
         self.assertIn("You have been logged out.", res_logout.get_data(as_text=True))
+
+    def test_login_redirect_validation(self):
+        """Ensure login next parameter permits safe local paths and rejects external/malformed URLs."""
+        # Unit verification of is_safe_url
+        self.assertTrue(is_safe_url("/user/profile"))
+        self.assertTrue(is_safe_url("/search?q=test&page=2"))
+        self.assertTrue(is_safe_url("/"))
+        self.assertFalse(is_safe_url("//attacker.example"))
+        self.assertFalse(is_safe_url("//attacker.example/phish"))
+        self.assertFalse(is_safe_url("https://attacker.example"))
+        self.assertFalse(is_safe_url("http://attacker.example"))
+        self.assertFalse(is_safe_url("javascript:alert(1)"))
+        self.assertFalse(is_safe_url("/\\\\attacker.example"))
+        self.assertFalse(is_safe_url("/\\evil.com"))
+        self.assertFalse(is_safe_url("\\\\evil.com"))
+        self.assertFalse(is_safe_url(""))
+        self.assertFalse(is_safe_url(None))
+        self.assertFalse(is_safe_url("   "))
+        self.assertFalse(is_safe_url("evil.com"))
+
+        user = User(
+            email="redir@example.com",
+            username="rediruser",
+            password="Password123!",
+            confirmed=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        # 1. Valid local path
+        limiter.reset()
+        csrf_token = self._get_csrf_token()
+        res1 = self.client.post(
+            "/auth/login?next=/user/rediruser",
+            headers={"X-CSRFToken": csrf_token},
+            data={"email": "redir@example.com", "password": "Password123!"},
+            follow_redirects=False,
+        )
+        self.assertEqual(res1.status_code, 302)
+        self.assertEqual(res1.headers.get("Location"), "/user/rediruser")
+
+        # 2. Local path with query string
+        limiter.reset()
+        csrf_token = self._get_csrf_token()
+        res2 = self.client.post(
+            "/auth/login?next=/search?q=test%26page=2",
+            headers={"X-CSRFToken": csrf_token},
+            data={"email": "redir@example.com", "password": "Password123!"},
+            follow_redirects=False,
+        )
+        self.assertEqual(res2.status_code, 302)
+        self.assertEqual(res2.headers.get("Location"), "/search?q=test&page=2")
+
+        # 3. Protocol-relative URL (rejected -> index fallback)
+        limiter.reset()
+        csrf_token = self._get_csrf_token()
+        res3 = self.client.post(
+            "/auth/login?next=//attacker.example/phish",
+            headers={"X-CSRFToken": csrf_token},
+            data={"email": "redir@example.com", "password": "Password123!"},
+            follow_redirects=False,
+        )
+        self.assertEqual(res3.status_code, 302)
+        self.assertEqual(res3.headers.get("Location"), "/")
+
+        # 4. Absolute external URL (rejected -> index fallback)
+        limiter.reset()
+        csrf_token = self._get_csrf_token()
+        res4 = self.client.post(
+            "/auth/login?next=https://attacker.example/login",
+            headers={"X-CSRFToken": csrf_token},
+            data={"email": "redir@example.com", "password": "Password123!"},
+            follow_redirects=False,
+        )
+        self.assertEqual(res4.status_code, 302)
+        self.assertEqual(res4.headers.get("Location"), "/")
+
+        # 5. Backslash variants (rejected -> index fallback)
+        for bad_next in ["/\\\\attacker.example", "\\\\attacker.example", "/\\evil.com"]:
+            limiter.reset()
+            csrf_token = self._get_csrf_token()
+            res_bad = self.client.post(
+                f"/auth/login?next={bad_next}",
+                headers={"X-CSRFToken": csrf_token},
+                data={"email": "redir@example.com", "password": "Password123!"},
+                follow_redirects=False,
+            )
+            self.assertEqual(res_bad.status_code, 302)
+            self.assertEqual(res_bad.headers.get("Location"), "/")
+
+        # 6. Empty and whitespace-only next (fallback to index)
+        limiter.reset()
+        csrf_token = self._get_csrf_token()
+        res_empty = self.client.post(
+            "/auth/login?next=",
+            headers={"X-CSRFToken": csrf_token},
+            data={"email": "redir@example.com", "password": "Password123!"},
+            follow_redirects=False,
+        )
+        self.assertEqual(res_empty.status_code, 302)
+        self.assertEqual(res_empty.headers.get("Location"), "/")
 
     def test_unconfirmed_account_restriction_and_confirmation(self):
         """Ensure unconfirmed users are redirected to unconfirmed page until confirmed."""
@@ -466,3 +569,121 @@ class AuthRoutesTestCase(unittest.TestCase):
             data={"password": "NewPassword123!", "password2": "NewPassword123!"},
         )
         self.assertEqual(res_submit.status_code, 400)
+
+    @patch("app.auth.views.send_email")
+    def test_rate_limiting_registration_and_reset(self, mock_send_email):
+        """Ensure rate limits are enforced on registration and reset endpoints."""
+        limiter.reset()
+
+        # 1. Registration endpoint (10 per hour limit)
+        token = self._get_csrf_token()
+        for i in range(10):
+            res = self.client.post(
+                "/auth/register",
+                headers={"X-CSRFToken": token},
+                data={
+                    "email": f"user_rl_{i}@example.com",
+                    "username": f"userrl{i}",
+                    "password": "Password123!",
+                    "password2": "Password123!",
+                },
+            )
+            self.assertEqual(res.status_code, 302)
+
+        # 11th registration attempt must be rate-limited (HTTP 429)
+        res_limit = self.client.post(
+            "/auth/register",
+            headers={"X-CSRFToken": token},
+            data={
+                "email": "user_rl_exceeded@example.com",
+                "username": "userrlexceeded",
+                "password": "Password123!",
+                "password2": "Password123!",
+            },
+        )
+        self.assertEqual(res_limit.status_code, 429)
+
+        # 2. Password reset endpoint (5 per hour limit)
+        limiter.reset()
+        reset_token = self._get_csrf_token()
+        for i in range(5):
+            res = self.client.post(
+                "/auth/reset",
+                headers={"X-CSRFToken": reset_token},
+                data={"email": f"reset_rl_{i}@example.com"},
+            )
+            self.assertEqual(res.status_code, 302)
+
+        # 6th reset attempt must be rate-limited (HTTP 429)
+        res_reset_limit = self.client.post(
+            "/auth/reset",
+            headers={"X-CSRFToken": reset_token},
+            data={"email": "reset_rl_exceeded@example.com"},
+        )
+        self.assertEqual(res_reset_limit.status_code, 429)
+
+    def test_email_normalization_across_auth_flows(self):
+        """BLOGG-SEC-009: Verify email normalization (stripping whitespace and lowercasing) across auth flows."""
+        limiter.reset()
+        token = self._get_csrf_token()
+
+        # 1. Register with mixed-case and surrounding whitespace
+        res_reg = self.client.post(
+            "/auth/register",
+            headers={"X-CSRFToken": token},
+            data={
+                "email": "  MixedUser@Example.COM  ",
+                "username": "mixeduser",
+                "password": "Password123!",
+                "password2": "Password123!",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(res_reg.status_code, 302)
+
+        # Verify user in database has normalized email
+        user = User.query.filter_by(username="mixeduser").first()
+        self.assertIsNotNone(user)
+        self.assertEqual(user.email, "mixeduser@example.com")
+
+        # 2. Duplicate registration with different case/spaces is rejected by validation
+        token = self._get_csrf_token()
+        res_dup = self.client.post(
+            "/auth/register",
+            headers={"X-CSRFToken": token},
+            data={
+                "email": "MIXEDUSER@example.com",
+                "username": "anotheruser",
+                "password": "Password123!",
+                "password2": "Password123!",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(res_dup.status_code, 200)
+        self.assertIn("Email already registered.", res_dup.get_data(as_text=True))
+
+        # 3. Login with mixed-case and whitespace succeeds
+        token = self._get_csrf_token()
+        res_login = self.client.post(
+            "/auth/login",
+            headers={"X-CSRFToken": token},
+            data={
+                "email": "  MIXEDuser@EXAMPLE.com  ",
+                "password": "Password123!",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(res_login.status_code, 302)
+        self.assertEqual(res_login.headers.get("Location"), "/")
+
+        # 4. Password reset request with mixed-case email finds the account (as anonymous user)
+        self.client.get("/auth/logout")
+        token = self._get_csrf_token()
+        res_reset = self.client.post(
+            "/auth/reset",
+            headers={"X-CSRFToken": token},
+            data={"email": "  MixedUser@Example.COM  "},
+            follow_redirects=False,
+        )
+        self.assertEqual(res_reset.status_code, 302)
+        self.assertEqual(res_reset.headers.get("Location"), "/auth/login")
