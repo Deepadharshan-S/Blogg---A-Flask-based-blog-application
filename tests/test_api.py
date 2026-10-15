@@ -247,3 +247,95 @@ class APITestCase(unittest.TestCase):
             "/api/v1/users/nonexistent_user/posts", headers=self.get_api_headers()
         )
         self.assertEqual(res_nonexistent_posts.status_code, 404)
+
+    def test_unconfirmed_user_blocked_across_api_operations(self):
+        """Ensure unconfirmed users cannot perform protected API writes via Basic Auth or Bearer token."""
+        # 1. Create confirmed and unconfirmed authors
+        confirmed_author = User(
+            email="conf_writer@example.com",
+            username="confwriter",
+            password="Password123!",
+            confirmed=True,
+        )
+        unconfirmed_author = User(
+            email="unconf_writer@example.com",
+            username="unconfwriter",
+            password="Password123!",
+            confirmed=False,
+        )
+        db.session.add_all([confirmed_author, unconfirmed_author])
+        db.session.commit()
+
+        # 2. Confirmed user creates post via Basic Auth -> 201
+        res_conf_basic = self.client.post(
+            "/api/v1/posts",
+            headers=self.get_api_headers(
+                username="conf_writer@example.com", password="Password123!"
+            ),
+            json={"body": "Post by confirmed user via Basic Auth"},
+        )
+        self.assertEqual(res_conf_basic.status_code, 201)
+        post_id = res_conf_basic.get_json()["id"]
+
+        # 3. Unconfirmed user attempts to create post via Basic Auth -> 403
+        res_unconf_basic = self.client.post(
+            "/api/v1/posts",
+            headers=self.get_api_headers(
+                username="unconf_writer@example.com", password="Password123!"
+            ),
+            json={"body": "Post by unconfirmed user via Basic Auth"},
+        )
+        self.assertEqual(res_unconf_basic.status_code, 403)
+        self.assertIn("Account is not confirmed", res_unconf_basic.get_json()["message"])
+
+        # 4. Unconfirmed user with manually issued or existing Bearer token -> 403
+        unconf_token = unconfirmed_author.generate_auth_token()
+        res_unconf_token = self.client.post(
+            "/api/v1/posts",
+            headers=self.get_api_headers(token=unconf_token),
+            json={"body": "Post by unconfirmed user via Bearer token"},
+        )
+        self.assertEqual(res_unconf_token.status_code, 403)
+
+        # 5. Confirmed user with Bearer token -> 201
+        conf_token = confirmed_author.generate_auth_token()
+        res_conf_token = self.client.post(
+            "/api/v1/posts",
+            headers=self.get_api_headers(token=conf_token),
+            json={"body": "Post by confirmed user via Bearer token"},
+        )
+        self.assertEqual(res_conf_token.status_code, 201)
+
+        # 6. Unconfirmed user attempts to edit a post -> 403
+        res_unconf_edit = self.client.put(
+            f"/api/v1/posts/{post_id}",
+            headers=self.get_api_headers(token=unconf_token),
+            json={"body": "Attempted edit by unconfirmed user"},
+        )
+        self.assertEqual(res_unconf_edit.status_code, 403)
+
+        # 7. Missing credentials -> 401
+        res_no_creds = self.client.post(
+            "/api/v1/posts",
+            headers=self.get_api_headers(),
+            json={"body": "Post with no credentials"},
+        )
+        self.assertEqual(res_no_creds.status_code, 401)
+
+        # 8. Invalid credentials -> 401
+        res_bad_creds = self.client.post(
+            "/api/v1/posts",
+            headers=self.get_api_headers(
+                username="conf_writer@example.com", password="BadPassword!"
+            ),
+            json={"body": "Post with bad credentials"},
+        )
+        self.assertEqual(res_bad_creds.status_code, 401)
+
+        # 9. Existing public read-only access remains fully functional -> 200
+        res_public_list = self.client.get("/api/v1/posts", headers=self.get_api_headers())
+        self.assertEqual(res_public_list.status_code, 200)
+        res_public_post = self.client.get(
+            f"/api/v1/posts/{post_id}", headers=self.get_api_headers()
+        )
+        self.assertEqual(res_public_post.status_code, 200)

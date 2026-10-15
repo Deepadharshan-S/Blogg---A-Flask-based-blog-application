@@ -24,7 +24,7 @@ def get_auth_user_from_request():
             encoded_creds = auth_header[6:].strip()
             decoded = base64.b64decode(encoded_creds).decode("utf-8")
             email, password = decoded.split(":", 1)
-            user = User.query.filter_by(email=email).first()
+            user = User.query.filter_by(email=email.strip().lower()).first()
             if user and user.verify_password(password):
                 return user
         except Exception:
@@ -46,6 +46,8 @@ def token_auth_required(f):
             return unauthorized(
                 "Authentication required. Include a valid Bearer token in the Authorization header."
             )
+        if not g.current_user.confirmed:
+            return forbidden("Account is not confirmed. Please confirm your email address.")
         return f(*args, **kwargs)
 
     return decorated
@@ -55,6 +57,12 @@ def permission_required_api(permission):
     def decorator(f):
         @wraps(f)
         def decorated(*args, **kwargs):
+            if not g.current_user.is_authenticated:
+                return unauthorized(
+                    "Authentication required. Include a valid Bearer token in the Authorization header."
+                )
+            if not g.current_user.confirmed:
+                return forbidden("Account is not confirmed. Please confirm your email address.")
             if not g.current_user.can(permission):
                 return forbidden("Insufficient permissions to perform this action.")
             return f(*args, **kwargs)
@@ -75,7 +83,7 @@ def get_token():
         email = data.get("email")
         password = data.get("password")
         if email and password:
-            candidate = User.query.filter_by(email=email).first()
+            candidate = User.query.filter_by(email=email.strip().lower()).first()
             if candidate and candidate.verify_password(password):
                 user = candidate
 
