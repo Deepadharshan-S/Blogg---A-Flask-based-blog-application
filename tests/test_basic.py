@@ -74,3 +74,76 @@ class BasicsTestCase(unittest.TestCase):
         """Ensure RATELIMIT_STORAGE_URI is configured on app."""
         self.assertIn("RATELIMIT_STORAGE_URI", self.app.config)
         self.assertEqual(self.app.config["RATELIMIT_STORAGE_URI"], "memory://")
+
+    def test_production_cookie_security_attributes(self):
+        """Ensure ProductionConfig sets Secure, HttpOnly, and SameSite cookie attributes."""
+        with patch.dict(os.environ, {"SECRET_KEY": "super-secret-prod-key"}):
+            prod_app = create_app("production")
+            self.assertTrue(prod_app.config["SESSION_COOKIE_SECURE"])
+            self.assertTrue(prod_app.config["SESSION_COOKIE_HTTPONLY"])
+            self.assertEqual(prod_app.config["SESSION_COOKIE_SAMESITE"], "Lax")
+            self.assertTrue(prod_app.config["REMEMBER_COOKIE_SECURE"])
+            self.assertTrue(prod_app.config["REMEMBER_COOKIE_HTTPONLY"])
+            self.assertEqual(prod_app.config["REMEMBER_COOKIE_SAMESITE"], "Lax")
+
+    def test_bounded_email_executor(self):
+        """Ensure email executor is bounded and handles task submissions."""
+        from app.email import get_email_executor
+
+        executor = get_email_executor(max_workers=2)
+        self.assertIsNotNone(executor)
+        self.assertLessEqual(executor._max_workers, 4)
+
+    def test_proxyfix_configuration(self):
+        """Ensure ProxyFix middleware is applied only when BLOGG_NUM_PROXIES > 0."""
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        # 1. Default (no proxies) -> standard wsgi_app without ProxyFix
+        with patch.dict(os.environ, {"BLOGG_NUM_PROXIES": "0"}):
+            app_direct = create_app("testing")
+            self.assertNotIsInstance(app_direct.wsgi_app, ProxyFix)
+
+        # 2. Configured with 1 proxy -> wsgi_app is wrapped with ProxyFix
+        with patch.dict(os.environ, {"BLOGG_NUM_PROXIES": "1"}):
+            app_proxy = create_app("testing")
+            self.assertIsInstance(app_proxy.wsgi_app, ProxyFix)
+            self.assertEqual(app_proxy.wsgi_app.x_for, 1)
+
+    def test_security_headers_and_csp(self):
+        """BLOGG-SEC-011: Ensure security headers (CSP, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection=0, HSTS) are correctly configured."""
+        client = self.app.test_client()
+        res = client.get("/")
+
+        # Standard baseline headers
+        self.assertEqual(res.headers.get("X-Content-Type-Options"), "nosniff")
+        self.assertEqual(res.headers.get("X-Frame-Options"), "SAMEORIGIN")
+        self.assertEqual(res.headers.get("X-XSS-Protection"), "0")
+        self.assertEqual(res.headers.get("Referrer-Policy"), "strict-origin-when-cross-origin")
+
+        # Content-Security-Policy
+        csp = res.headers.get("Content-Security-Policy", "")
+        self.assertIn("default-src 'self'", csp)
+        self.assertIn("script-src 'self'", csp)
+        self.assertIn("style-src 'self'", csp)
+        self.assertIn("font-src 'self'", csp)
+        self.assertIn("img-src 'self'", csp)
+        self.assertIn("connect-src 'self'", csp)
+
+        # HSTS must NOT be emitted in testing or development over HTTP
+        self.assertNotIn("Strict-Transport-Security", res.headers)
+
+        # HSTS MUST be emitted in production deployments when connection is HTTPS
+        with patch.dict(os.environ, {"SECRET_KEY": "super-secret-prod-key"}):
+            prod_app = create_app("production")
+            prod_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
+            with prod_app.app_context():
+                db.create_all()
+            prod_client = prod_app.test_client()
+
+            # HTTPS request receives HSTS
+            res_https = prod_client.get("/", base_url="https://localhost")
+            self.assertEqual(res_https.headers.get("Strict-Transport-Security"), "max-age=31536000")
+
+            # HTTP request does not receive HSTS
+            res_http = prod_client.get("/", base_url="http://localhost")
+            self.assertNotIn("Strict-Transport-Security", res_http.headers)

@@ -21,8 +21,10 @@ class Config:
     BLOGG_COMMENTS_PER_PAGE = 30
     RESET_PASSWORD_TOKEN_MAX_AGE = 1800
     RATELIMIT_STORAGE_URI = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
+    BLOGG_NUM_PROXIES = int(os.environ.get("BLOGG_NUM_PROXIES", "0"))
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_RECORD_QUERIES = True
+    BOOTSTRAP_SERVE_LOCAL = True
 
     @staticmethod
     def init_app(app):
@@ -43,10 +45,19 @@ class TestingConfig(Config):
 
 
 class ProductionConfig(Config):
+    DEBUG = False
+    TESTING = False
     SECRET_KEY = os.environ.get("SECRET_KEY")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL") or "sqlite:///" + os.path.join(
         basedir, "data.sqlite"
     )
+
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SECURE = True
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
 
     @classmethod
     def init_app(cls, app):
@@ -55,6 +66,13 @@ class ProductionConfig(Config):
         if not secret_key:
             raise RuntimeError("SECRET_KEY must be set in production")
         app.config["SECRET_KEY"] = secret_key
+
+        ratelimit_storage = app.config.get("RATELIMIT_STORAGE_URI", "memory://")
+        if ratelimit_storage == "memory://":
+            app.logger.warning(
+                "Production rate limiting is using 'memory://' storage. "
+                "For multi-worker deployments, set RATELIMIT_STORAGE_URI to a distributed backend (e.g. redis://host:port/0)."
+            )
 
 
 config = {
