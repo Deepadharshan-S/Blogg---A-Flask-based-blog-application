@@ -4,7 +4,17 @@ import click
 from flask_migrate import Migrate, upgrade
 
 from app import create_app, db
-from app.models import Comment, Permission, Post, Role, User
+from app.models import (
+    ApiToken,
+    AuditEvent,
+    Comment,
+    PasswordHistory,
+    Permission,
+    Post,
+    Role,
+    User,
+    UserSession,
+)
 
 app = create_app(os.getenv("FLASK_CONFIG") or "development")
 migrate = Migrate(app, db)
@@ -12,7 +22,18 @@ migrate = Migrate(app, db)
 
 @app.shell_context_processor
 def make_shell_context():
-    return dict(db=db, User=User, Role=Role, Post=Post, Comment=Comment, Permission=Permission)
+    return dict(
+        db=db,
+        User=User,
+        Role=Role,
+        Post=Post,
+        Comment=Comment,
+        Permission=Permission,
+        AuditEvent=AuditEvent,
+        PasswordHistory=PasswordHistory,
+        UserSession=UserSession,
+        ApiToken=ApiToken,
+    )
 
 
 @app.cli.command("init-db")

@@ -14,8 +14,9 @@ from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
 from .. import db
-from ..decorators import admin_required, permission_required
+from ..decorators import admin_required, owner_or_permission, permission_required
 from ..models import Comment, Permission, Post, Role, User
+from ..security import Event, administrator_count, record_audit
 from . import main
 from .forms import CommentForm, EditProfileAdminForm, EditProfileForm, PostForm
 
@@ -103,14 +104,38 @@ def edit_profile_admin(id):
     user = db.get_or_404(User, id)
     form = EditProfileAdminForm(user=user)
     if form.validate_on_submit():
+        actor = current_user._get_current_object()
+        old_role = user.role.name if user.role else None
+        new_role = db.session.get(Role, form.role.data)
+        new_role_name = new_role.name if new_role else None
+
+        # Same guardrails as the admin console.
+        if old_role != new_role_name:
+            if user == actor:
+                flash("Use another administrator account to change your own role.")
+                return redirect(url_for(".edit_profile_admin", id=user.id))
+            if user.can(Permission.ADMIN) and not new_role.has_admin and administrator_count() <= 1:
+                flash("Cannot demote the last administrator.")
+                return redirect(url_for(".edit_profile_admin", id=user.id))
+
         user.email = form.email.data
         user.username = form.username.data
         user.confirmed = form.confirmed.data
-        user.role = db.session.get(Role, form.role.data)
+        user.role = new_role
         user.name = form.name.data
         user.location = form.location.data
         user.about_me = form.about_me.data
         db.session.add(user)
+        if old_role != new_role_name:
+            record_audit(
+                Event.USER_ROLE_CHANGED,
+                actor=actor,
+                target_type="user",
+                target_id=user.id,
+                target_label=user.email,
+                detail={"from": old_role, "to": new_role_name, "via": "edit_profile_admin"},
+                commit=False,
+            )
         db.session.commit()
         current_app.logger.info(
             f"Admin {current_user.email} updated profile of user {user.email} "
@@ -166,7 +191,7 @@ def post(id):
 @login_required
 def edit(id):
     post = db.get_or_404(Post, id)
-    if current_user != post.author and not current_user.can(Permission.ADMIN):
+    if not owner_or_permission(current_user._get_current_object(), post):
         current_app.logger.warning(
             f"Unauthorized edit attempt by {current_user.email} on post {post.id}"
         )

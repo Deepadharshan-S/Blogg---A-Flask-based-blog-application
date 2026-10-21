@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Blogg - Roles & Permissions{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+  <h1>Roles &amp; Permissions</h1>
+</div>
+
+{% set active = 'roles' %}
+{% include 'admin/_nav.html' %}
+
+{% if current_user.can(Permission.ADMIN) %}
+<p>
+  <a class="btn btn-primary" href="{{ url_for('admin.role_new') }}">New Role</a>
+</p>
+{% endif %}
+
+<div class="panel panel-default">
+  <table class="table table-striped" style="margin-bottom: 0;">
+    <thead>
+      <tr>
+        <th>Role</th>
+        <th>Permissions</th>
+        <th>Users</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for role in roles %}
+      <tr>
+        <td>
+          <strong>{{ role.name }}</strong>
+          {% if role.default %}<span class="label label-default">default</span>{% endif %}
+          {% if role.is_builtin %}<span class="label label-info">built-in</span>{% endif %}
+        </td>
+        <td>
+          {% for name in Role.permission_names(role.permissions) %}
+          <span class="label label-primary">{{ name }}</span>
+          {% else %}
+          <span class="text-muted">none</span>
+          {% endfor %}
+        </td>
+        <td>{{ role.user_count }}</td>
+        <td class="text-right">
+          {% if current_user.can(Permission.ADMIN) %}
+          <a class="btn btn-xs btn-default" href="{{ url_for('admin.role_edit', id=role.id) }}">Edit</a>
+          {% if not role.is_builtin and role.user_count == 0 and not role.default %}
+          <form method="post" action="{{ url_for('admin.role_delete', id=role.id) }}"
+                style="display: inline;" onsubmit="return confirm('Delete role {{ role.name }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-xs btn-danger">Delete</button>
+          </form>
+          {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

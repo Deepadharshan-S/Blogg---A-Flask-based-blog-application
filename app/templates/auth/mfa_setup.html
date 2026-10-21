@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}Blogg - Set Up Two-Factor Authentication{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+  <h1>Set Up Two-Factor Authentication</h1>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="panel panel-default">
+      <div class="panel-heading">Step 1 &mdash; Scan or enter the key</div>
+      <div class="panel-body text-center">
+        <img src="{{ qr_data_uri }}" alt="TOTP QR code" style="max-width: 220px; image-rendering: pixelated;">
+        <p class="text-muted" style="word-break: break-all; margin-top: 10px;">
+          Manual key: <code>{{ secret }}</code>
+        </p>
+        <p class="text-muted">
+          Use Google Authenticator, Authy, 1Password or any other TOTP app.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="panel panel-default">
+      <div class="panel-heading">Step 2 &mdash; Verify the code</div>
+      <div class="panel-body">
+        {{ wtf.quick_form(form, button_map={"submit": "btn btn-primary"}) }}
+        <p class="text-muted" style="margin-top: 10px;">
+          Two-factor authentication stays disabled until you enter a valid code.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

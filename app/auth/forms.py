@@ -120,3 +120,17 @@ class ChangeEmailForm(FlaskForm):
         normalized = field.data.strip().lower() if field.data else ""
         if User.query.filter_by(email=normalized).first():
             raise ValidationError("Email already registered.")
+
+
+class MFAVerificationForm(FlaskForm):
+    # Accepts a 6-digit TOTP code or an 8-character backup code (xxxx-xxxx).
+    code = StringField(
+        "Authentication code",
+        validators=[DataRequired(), Length(6, 32)],
+    )
+    submit = SubmitField("Verify")
+
+
+class DisableMFAForm(FlaskForm):
+    password = PasswordField("Confirm with your password", validators=[DataRequired()])
+    submit = SubmitField("Disable two-factor authentication")

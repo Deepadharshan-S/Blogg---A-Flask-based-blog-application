@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}Blogg - Two-Factor Authentication{% endblock %}
+
+{% block page_content %}
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-header text-center">
+      <div class="auth-icon">🛡️</div>
+      <h2>Two-Factor Authentication</h2>
+      <p>Enter the 6-digit code from your authenticator app, or one of your backup codes</p>
+    </div>
+
+    <div class="auth-body">
+      {{ wtf.quick_form(form, button_map={"submit": "btn btn-primary btn-block"}) }}
+    </div>
+
+    <div class="auth-footer text-center">
+      <p class="auth-subtext">
+        <a href="{{ url_for('auth.login') }}">&larr; Back to login</a>
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

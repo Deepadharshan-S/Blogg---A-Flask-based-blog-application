@@ -66,6 +66,10 @@ def create_app(config_name):
 
     app.register_blueprint(auth_blueprint, url_prefix="/auth")
 
+    from .admin import admin as admin_blueprint
+
+    app.register_blueprint(admin_blueprint)
+
     from .api import api as api_blueprint
 
     csrf.exempt(api_blueprint)
@@ -111,11 +115,19 @@ def create_app(config_name):
             "base-uri 'self'",
         ]
         response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
-
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=(), payment=()"
+        )
         # Strict-Transport-Security only in production deployments over HTTPS
         if not app.debug and not app.testing and request.is_secure:
             response.headers["Strict-Transport-Security"] = "max-age=31536000"
-
+        # Never cache pages or API payloads: after logout the back button
+        # must re-fetch (and get an anonymous response), not replay a cached
+        # authenticated view. Static assets keep their normal caching.
+        content_type = response.content_type or ""
+        if content_type.startswith("text/html") or content_type.startswith("application/json"):
+            response.headers["Cache-Control"] = "no-store, private"
+            response.headers["Pragma"] = "no-cache"
         return response
 
     if not os.path.exists("logs"):

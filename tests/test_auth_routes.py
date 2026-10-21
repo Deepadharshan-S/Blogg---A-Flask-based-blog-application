@@ -2,6 +2,8 @@ import re
 import unittest
 from unittest.mock import patch
 
+from flask import g
+
 from app import create_app, db, limiter
 from app.auth.views import is_safe_url
 from app.models import Role, User
@@ -12,6 +14,19 @@ class AuthRoutesTestCase(unittest.TestCase):
         self.app = create_app("testing")
         self.app_context = self.app.app_context()
         self.app_context.push()
+
+        # The app context pushed above is reused by every request Flask
+        # serves, so `g` (flask-wtf caches the CSRF token there, flask-login
+        # the current user) would leak between requests. Clear it after each
+        # request to restore production-like per-request isolation — the
+        # same fix as tests/iam_base.py. Without it a stale g.csrf_token
+        # short-circuits generate_csrf() after logout, the session never
+        # gets a fresh csrf_token and the emptied session deletes its cookie.
+        @self.app.teardown_request
+        def _isolate_g(err=None):  # noqa: ARG001
+            g.pop("csrf_token", None)
+            g.pop("_login_user", None)
+
         db.create_all()
         Role.insert_roles()
         limiter.reset()
@@ -148,10 +163,17 @@ class AuthRoutesTestCase(unittest.TestCase):
         self.assertEqual(res_success.status_code, 200)
         self.assertIn("loginuser", res_success.get_data(as_text=True))
 
-        # Logout
-        res_logout = self.client.get("/auth/logout", follow_redirects=True)
+        # Logout (POST-only; a GET would be forged cross-site)
+        token = self._get_csrf_token()
+        res_logout = self.client.post(
+            "/auth/logout",
+            headers={"X-CSRFToken": token},
+            data={"csrf_token": token},
+            follow_redirects=True,
+        )
         self.assertEqual(res_logout.status_code, 200)
         self.assertIn("You have been logged out.", res_logout.get_data(as_text=True))
+        self.assertEqual(self.client.get("/auth/logout").status_code, 405)
 
     def test_login_redirect_validation(self):
         """Ensure login next parameter permits safe local paths and rejects external/malformed URLs."""
@@ -677,7 +699,16 @@ class AuthRoutesTestCase(unittest.TestCase):
         self.assertEqual(res_login.headers.get("Location"), "/")
 
         # 4. Password reset request with mixed-case email finds the account (as anonymous user)
-        self.client.get("/auth/logout")
+        # Logout is POST-only; reuse the pre-login CSRF token because an
+        # unconfirmed signed-in user is bounced off "/" (auth.before_request),
+        # so fetching a fresh token there would fail. The session's csrf_token
+        # survives login.
+        res_logout = self.client.post(
+            "/auth/logout",
+            headers={"X-CSRFToken": token},
+            data={"csrf_token": token},
+        )
+        self.assertEqual(res_logout.status_code, 302)
         token = self._get_csrf_token()
         res_reset = self.client.post(
             "/auth/reset",

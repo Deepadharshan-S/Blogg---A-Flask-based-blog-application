@@ -76,6 +76,12 @@
         </li>
         {% endif %}
 
+        {% if current_user.can(Permission.MANAGE_USERS) %}
+        <li>
+          <a href="{{ url_for('admin.dashboard') }}">Admin</a>
+        </li>
+        {% endif %}
+
         {% if current_user.is_authenticated %}
         <li class="dropdown">
           <a href="#" class="dropdown-toggle" data-toggle="dropdown">
@@ -83,9 +89,15 @@
             Account <b class="caret"></b>
           </a>
           <ul class="dropdown-menu">
+            <li><a href="{{ url_for('auth.security') }}">Security &amp; Sessions</a></li>
             <li><a href="{{ url_for('auth.change_password') }}">Change Password</a></li>
             <li><a href="{{ url_for('auth.change_email_request') }}">Change Email</a></li>
-            <li><a href="{{ url_for('auth.logout') }}">Log Out</a></li>
+            <li>
+              <form action="{{ url_for('auth.logout') }}" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="dropdown-link">Log Out</button>
+              </form>
+            </li>
           </ul>
         </li>
         {% else %}

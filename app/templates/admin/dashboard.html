@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+
+{% block title %}Blogg - Admin Dashboard{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+  <h1>Admin Console</h1>
+</div>
+
+{% set active = 'dashboard' %}
+{% include 'admin/_nav.html' %}
+
+<div class="row">
+  <div class="col-sm-4 col-md-3">
+    <div class="panel panel-default">
+      <div class="panel-heading">Accounts</div>
+      <div class="panel-body">
+        <h3 style="margin-top: 0;">{{ stats.users }}</h3>
+        <p class="text-muted" style="margin-bottom: 5px;">
+          {{ stats.disabled }} disabled &bull;
+          {{ stats.locked }} locked &bull;
+          {{ stats.unconfirmed }} unconfirmed
+        </p>
+        <p class="text-muted" style="margin-bottom: 0;">
+          {{ stats.administrators }} administrator(s)
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4 col-md-3">
+    <div class="panel panel-default">
+      <div class="panel-heading">Roles</div>
+      <div class="panel-body">
+        <h3 style="margin-top: 0;">{{ stats.roles }}</h3>
+        <p class="text-muted" style="margin-bottom: 0;">
+          <a href="{{ url_for('admin.roles') }}">Manage roles &rarr;</a>
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4 col-md-3">
+    <div class="panel panel-default">
+      <div class="panel-heading">Active Sessions</div>
+      <div class="panel-body">
+        <h3 style="margin-top: 0;">{{ stats.active_sessions }}</h3>
+        <p class="text-muted" style="margin-bottom: 0;">
+          {{ stats.issued_tokens }} unrevoked API token(s)
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4 col-md-3">
+    <div class="panel panel-default">
+      <div class="panel-heading">Audit Events</div>
+      <div class="panel-body">
+        <h3 style="margin-top: 0;">{{ stats.audit_events }}</h3>
+        <p class="text-muted" style="margin-bottom: 0;">
+          {{ stats.posts }} post(s) published
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="panel panel-default">
+  <div class="panel-heading">Recent security events</div>
+  <table class="table table-condensed" style="margin-bottom: 0;">
+    <thead>
+      <tr>
+        <th>When</th>
+        <th>Event</th>
+        <th>Actor</th>
+        <th>Target</th>
+        <th>Result</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in recent %}
+      <tr>
+        <td>{{ moment(e.timestamp).fromNow() }}</td>
+        <td><code>{{ e.event }}</code></td>
+        <td>{{ e.actor_label or "-" }}</td>
+        <td>{{ e.target_label or "-" }}</td>
+        <td>
+          {% if e.success %}
+          <span class="label label-success">OK</span>
+          {% else %}
+          <span class="label label-danger">FAIL</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-muted">No events recorded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
