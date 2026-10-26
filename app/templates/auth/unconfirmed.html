@@ -3,29 +3,36 @@
 {% block title %}Blogg - Confirm Your Account{% endblock %}
 
 {% block page_content %}
-<div class="container text-center">
-    <div class="card shadow-sm mt-5">
-        <div class="card-body">
-            <h1 class="mb-3">Hello, {{ current_user.username }}!</h1>
-            <h3 class="text-danger">Your account is not confirmed yet.</h3>
-            <p class="mt-3">
-                Before you can access this site, you need to confirm your account.
-                Please check your inbox for a confirmation email with a link.
-            </p>
-            <p class="mt-3">
-                Didn't receive the email?
-                <a href="{{ url_for('auth.resend_confirmation') }}" class="btn btn-primary mt-2">Resend Confirmation Email</a>
-            </p>
-        </div>
+<div class="auth-page">
+  <div class="auth-card text-center">
+    <div class="auth-header text-center">
+      <div class="auth-icon">📬</div>
+      <h2>Hello, {{ current_user.username }}!</h2>
+      <p style="color: #ef4444; font-weight: 600; margin-top: 4px;">Your account is not confirmed yet.</p>
     </div>
-</div>
 
-<style>
-    .card {
-        max-width: 500px;
-        margin: auto;
-        border-radius: 8px;
-        padding: 20px;
-    }
-</style>
+    <div class="auth-body text-center" style="color: var(--text-body); line-height: 1.6;">
+      <p>
+        Before you can access Blogg, you need to confirm your account.
+        Please check your inbox for a confirmation email with a link.
+      </p>
+      <div style="margin-top: 24px; margin-bottom: 8px;">
+        <a href="{{ url_for('auth.resend_confirmation') }}" class="btn btn-primary btn-block">Resend Confirmation Email</a>
+      </div>
+    </div>
+
+    <div class="auth-footer text-center">
+      <div class="auth-divider">
+        <span>or</span>
+      </div>
+      <p class="auth-subtext">
+        Need to sign out?
+        <form action="{{ url_for('auth.logout') }}" method="post" style="display:inline;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="auth-register-link" style="background:none;border:none;cursor:pointer;padding:0;font-size:14px;">Log out &rarr;</button>
+        </form>
+      </p>
+    </div>
+  </div>
+</div>
 {% endblock %}
