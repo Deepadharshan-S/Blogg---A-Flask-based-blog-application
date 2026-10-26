@@ -718,3 +718,26 @@ class AuthRoutesTestCase(unittest.TestCase):
         )
         self.assertEqual(res_reset.status_code, 302)
         self.assertEqual(res_reset.headers.get("Location"), "/auth/login")
+
+    def test_static_assets_accessible_for_unconfirmed_and_must_change_password(self):
+        """Ensure static assets (including bootstrap.static) are never redirected for unconfirmed users."""
+        user = User(
+            email="unconf_assets@example.com",
+            username="unconfassets",
+            password="Password123!",
+            confirmed=False,
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        self._login("unconf_assets@example.com", "Password123!")
+
+        # Unconfirmed user accessing static assets receives 200 OK without redirect
+        res_css = self.client.get("/static/css/style.css")
+        self.assertEqual(res_css.status_code, 200)
+
+        res_bootstrap = self.client.get("/static/bootstrap/css/bootstrap.min.css")
+        self.assertEqual(res_bootstrap.status_code, 200)
+
+        res_js = self.client.get("/static/js/password-validator.js")
+        self.assertEqual(res_js.status_code, 200)
