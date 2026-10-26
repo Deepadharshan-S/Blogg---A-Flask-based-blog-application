@@ -187,6 +187,15 @@ def confirm(token):
 
 @auth.before_app_request
 def before_request():
+    # Static assets (including blueprint static routes like bootstrap.static)
+    # must never be redirected, otherwise styling and scripts break.
+    if (
+        request.endpoint == "static"
+        or (request.endpoint and request.endpoint.endswith(".static"))
+        or request.path.startswith("/static/")
+    ):
+        return
+
     user = current_user._get_current_object() if current_user.is_authenticated else None
 
     if user is None:
@@ -234,7 +243,7 @@ def before_request():
     # 403 in api.authentication.before_request.
     if (
         request.blueprint != "api"
-        and request.endpoint not in ("auth.change_password", "auth.logout", "static")
+        and request.endpoint not in ("auth.change_password", "auth.logout")
         and (user.must_change_password or password_expired(user))
     ):
         flash(
@@ -248,15 +257,7 @@ def before_request():
         return redirect(url_for("auth.change_password"))
 
     user.ping()
-    # Only gate real routes: on routing exceptions (404/405) url_rule is None
-    # and request.blueprint is None too, which would wrongly bounce the user
-    # to the unconfirmed page instead of the error page.
-    if (
-        request.url_rule is not None
-        and not user.confirmed
-        and request.blueprint != "auth"
-        and request.endpoint != "static"
-    ):
+    if not user.confirmed and request.blueprint != "auth":
         return redirect(url_for("auth.unconfirmed"))
 
 

@@ -45,7 +45,7 @@
     <div class="collapse navbar-collapse" id="navbar">
       <ul class="nav navbar-nav">
         <li><a href="{{ url_for('main.index') }}">Home</a></li>
-        {% if current_user.is_authenticated %}
+        {% if current_user.is_authenticated and current_user.confirmed %}
         <li>
           <a href="{{ url_for('main.user', username=current_user.username) }}">
             Profile
@@ -54,6 +54,7 @@
         {% endif %}
       </ul>
 
+      {% if not current_user.is_authenticated or current_user.confirmed %}
       <form class="navbar-form navbar-left search-form" role="search" action="{{ url_for('main.search') }}" method="get">
         <div class="input-group search-group">
           <input type="text" class="form-control search-input" placeholder="Search posts & users..." name="q" value="{{ request.args.get('q', '') }}">
@@ -62,6 +63,7 @@
           </span>
         </div>
       </form>
+      {% endif %}
 
       <ul class="nav navbar-nav navbar-right">
         <li>
@@ -70,13 +72,13 @@
           </button>
         </li>
 
-        {% if current_user.can(Permission.MODERATE) %}
+        {% if current_user.can(Permission.MODERATE) and current_user.confirmed %}
         <li>
           <a href="{{ url_for('main.moderate') }}">Moderate Comments</a>
         </li>
         {% endif %}
 
-        {% if current_user.can(Permission.MANAGE_USERS) %}
+        {% if current_user.can(Permission.MANAGE_USERS) and current_user.confirmed %}
         <li>
           <a href="{{ url_for('admin.dashboard') }}">Admin</a>
         </li>
@@ -89,9 +91,12 @@
             Account <b class="caret"></b>
           </a>
           <ul class="dropdown-menu">
+            {% if current_user.confirmed %}
             <li><a href="{{ url_for('auth.security') }}">Security &amp; Sessions</a></li>
             <li><a href="{{ url_for('auth.change_password') }}">Change Password</a></li>
             <li><a href="{{ url_for('auth.change_email_request') }}">Change Email</a></li>
+            <li class="divider"></li>
+            {% endif %}
             <li>
               <form action="{{ url_for('auth.logout') }}" method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -181,6 +186,40 @@
         });
       });
     });
+
+    // Dropdown toggle fallback for click & touch
+    document.querySelectorAll('.dropdown-toggle').forEach(function(toggle) {
+      toggle.addEventListener('click', function(e) {
+        e.preventDefault();
+        var parent = toggle.closest('.dropdown');
+        if (parent) {
+          var isOpen = parent.classList.contains('open');
+          document.querySelectorAll('.dropdown.open').forEach(function(d) {
+            d.classList.remove('open');
+          });
+          if (!isOpen) {
+            parent.classList.add('open');
+          }
+        }
+      });
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.dropdown')) {
+        document.querySelectorAll('.dropdown.open').forEach(function(d) {
+          d.classList.remove('open');
+        });
+      }
+    });
+
+    // Mobile navbar toggle fallback
+    var navToggle = document.querySelector('.navbar-toggle');
+    var navCollapse = document.getElementById('navbar');
+    if (navToggle && navCollapse) {
+      navToggle.addEventListener('click', function() {
+        navCollapse.classList.toggle('in');
+      });
+    }
   });
 </script>
 {% endblock %}
