@@ -326,6 +326,10 @@ class User(UserMixin, db.Model):
         self.password_changed_at = utc_now()
 
     def verify_password(self, password):
+        if not self.password_hash:
+            # Tombstoned (anonymized) accounts have no password; without this
+            # guard check_password_hash(None, ...) would raise.
+            return False
         return check_password_hash(self.password_hash, password)
 
     # ------------------------------------------------------------------
@@ -1011,6 +1015,55 @@ class AuditEvent(db.Model):
             "ip": self.ip,
             "user_agent": self.user_agent,
             "detail": detail,
+        }
+
+
+class AccessLog(db.Model):
+    """Per-request access trail: who reached which resource, from where, with what result.
+
+    Query strings are never stored and one-time tokens embedded in a path are
+    redacted (see ``security.sanitize_path``), so the trail can be reviewed
+    without leaking credentials.
+    """
+
+    __tablename__ = "access_logs"
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, index=True, default=utc_now)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), index=True)
+    user_label = db.Column(db.String(128))  # email at request time (survives deletion)
+    method = db.Column(db.String(8))
+    path = db.Column(db.String(256), index=True)
+    endpoint = db.Column(db.String(128))  # Flask endpoint; None for unmatched URLs
+    status_code = db.Column(db.Integer, index=True)
+    duration_ms = db.Column(db.Integer)
+    ip = db.Column(db.String(64))
+    user_agent = db.Column(db.String(256))
+    is_api = db.Column(db.Boolean, default=False, index=True)
+
+    STATUS_CLASSES = ("1xx", "2xx", "3xx", "4xx", "5xx")
+
+    @property
+    def status_class(self):
+        """HTTP status class (``2xx`` ... ``5xx``) used by the console/API filters."""
+        if not self.status_code:
+            return None
+        return f"{self.status_code // 100}xx"
+
+    def to_json(self):
+        return {
+            "id": self.id,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "user_id": self.user_id,
+            "user": self.user_label,
+            "method": self.method,
+            "path": self.path,
+            "endpoint": self.endpoint,
+            "status_code": self.status_code,
+            "status_class": self.status_class,
+            "duration_ms": self.duration_ms,
+            "ip": self.ip,
+            "user_agent": self.user_agent,
+            "is_api": bool(self.is_api),
         }
 
 

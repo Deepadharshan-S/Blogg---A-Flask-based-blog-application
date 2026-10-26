@@ -55,6 +55,13 @@
       <div class="panel-heading">Audit Events</div>
       <div class="panel-body">
         <h3 style="margin-top: 0;">{{ stats.audit_events }}</h3>
+        <p class="text-muted" style="margin-bottom: 5px;">
+          {% if current_user.can(Permission.VIEW_AUDIT) %}
+          <a href="{{ url_for('admin.access_log') }}">{{ stats.access_logs }} access record(s)</a>
+          {% else %}
+          {{ stats.access_logs }} access record(s)
+          {% endif %}
+        </p>
         <p class="text-muted" style="margin-bottom: 0;">
           {{ stats.posts }} post(s) published
         </p>

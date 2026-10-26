@@ -36,7 +36,7 @@
           {{ moment(current_user.password_changed_at).fromNow() }}
           {% else %}unknown{% endif %}
         </div>
-        {{ wtf.quick_form(mfa_form, button_map={"submit": "btn btn-danger btn-sm"}) }}
+        {{ wtf.quick_form(mfa_form, button_map={"submit": "danger btn-sm"}) }}
         {% else %}
         <p>
           <span class="label label-default">Disabled</span>

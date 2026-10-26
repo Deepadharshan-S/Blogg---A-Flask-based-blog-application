@@ -9,10 +9,11 @@ from sqlalchemy import and_, or_
 
 from .. import db
 from ..email import send_email
-from ..models import AuditEvent, Permission, Role, User, utc_now
+from ..models import AccessLog, AuditEvent, Permission, Role, User, utc_now
 from ..security import (
     Event,
-    administrator_count,
+    active_administrator_count,
+    escape_like,
     record_audit,
     revoke_user_sessions,
 )
@@ -46,9 +47,13 @@ def admin_list_users():
     query = User.query
     q = request.args.get("q", "").strip()
     if q:
-        like = f"%{q}%"
+        like = f"%{escape_like(q)}%"
         query = query.filter(
-            or_(User.username.ilike(like), User.email.ilike(like), User.name.ilike(like))
+            or_(
+                User.username.ilike(like, escape="\\"),
+                User.email.ilike(like, escape="\\"),
+                User.name.ilike(like, escape="\\"),
+            )
         )
     role = request.args.get("role", "").strip()
     if role:
@@ -122,12 +127,22 @@ def admin_update_user(id):
             return bad_request("Use another administrator account to change your own role.")
         old_role = user.role.name if user.role else None
         if old_role != role.name:
-            # Last-administrator protection.
+            # A MANAGE_USERS-only token must not be able to mint a new
+            # administrator (privilege escalation).
+            if role.permissions & Permission.ADMIN == Permission.ADMIN and not actor.can(
+                Permission.ADMIN
+            ):
+                return bad_request("Only administrators can grant the Administrator permission.")
+            # Last-administrator protection (active accounts only).
             removes_admin = (
                 user.can(Permission.ADMIN)
                 and not role.permissions & Permission.ADMIN == Permission.ADMIN
             )
-            if removes_admin and administrator_count() <= 1:
+            if (
+                removes_admin
+                and user.active
+                and active_administrator_count(exclude_user_id=user.id) == 0
+            ):
                 return bad_request("Cannot demote the last administrator.")
             user.role = role
             changes["role"] = {"from": old_role, "to": role.name}
@@ -146,7 +161,11 @@ def admin_update_user(id):
         if new_active != bool(user.active):
             if not new_active and user.id == g.current_user.id:
                 return bad_request("You cannot disable your own account.")
-            if user.can(Permission.ADMIN) and not new_active and administrator_count() <= 1:
+            if (
+                user.can(Permission.ADMIN)
+                and not new_active
+                and active_administrator_count(exclude_user_id=user.id) == 0
+            ):
                 return bad_request("Cannot disable the last administrator.")
             user.active = new_active
             changes["active"] = new_active
@@ -295,7 +314,11 @@ def admin_delete_user(id):
         return bad_request("Use your account's security page to delete yourself.")
     if user.deleted_at:
         return bad_request("This account has already been deleted.")
-    if user.can(Permission.ADMIN) and administrator_count() <= 1:
+    if (
+        user.can(Permission.ADMIN)
+        and user.active
+        and active_administrator_count(exclude_user_id=user.id) == 0
+    ):
         return bad_request("Cannot delete the last administrator.")
     user.revoke_sessions()
     user.anonymize()
@@ -391,8 +414,15 @@ def admin_update_role(id):
             role.permissions & Permission.ADMIN == Permission.ADMIN
             and permissions & Permission.ADMIN != Permission.ADMIN
         )
-        if loses_admin and role.user_count > 0 and administrator_count() <= 1:
-            return bad_request("Cannot remove the ADMIN permission from the last administrator.")
+        # Only an *active* administrator outside this role can absorb the loss.
+        if (
+            loses_admin
+            and role.user_count > 0
+            and active_administrator_count(exclude_role_id=role.id) == 0
+        ):
+            return bad_request(
+                "Cannot remove the ADMIN permission from the last administrator role."
+            )
         detail["permissions"] = {
             "from": Role.permission_names(role.permissions),
             "to": Role.permission_names(permissions),
@@ -449,19 +479,31 @@ def admin_delete_role(id):
 @permission_required_api(Permission.VIEW_AUDIT)
 def admin_audit_log():
     """Security event log: ``?event=`` ``?success=`` ``?q=`` ``?page=``."""
+    filters = {
+        "event": request.args.get("event", "").strip(),
+        "success": request.args.get("success", "").strip(),
+        "q": request.args.get("q", "").strip(),
+    }
+    # Reading the trail is audited, on the API exactly as in the console.
+    record_audit(
+        Event.AUDIT_VIEWED,
+        actor=g.current_user,
+        detail={"filters": filters, "via": "api"},
+    )
+
     query = AuditEvent.query
-    event = request.args.get("event", "").strip()
-    if event:
-        query = query.filter(AuditEvent.event == event)
-    success = request.args.get("success", "").strip()
-    if success in ("0", "1", "true", "false"):
-        want = success in ("1", "true")
+    if filters["event"]:
+        query = query.filter(AuditEvent.event == filters["event"])
+    if filters["success"] in ("0", "1", "true", "false"):
+        want = filters["success"] in ("1", "true")
         query = query.filter(AuditEvent.success.is_(want))
-    q = request.args.get("q", "").strip()
-    if q:
-        like = f"%{q}%"
+    if filters["q"]:
+        like = f"%{escape_like(filters['q'])}%"
         query = query.filter(
-            or_(AuditEvent.actor_label.ilike(like), AuditEvent.target_label.ilike(like))
+            or_(
+                AuditEvent.actor_label.ilike(like, escape="\\"),
+                AuditEvent.target_label.ilike(like, escape="\\"),
+            )
         )
 
     page, per_page = _pagination()
@@ -485,3 +527,56 @@ def admin_audit_log():
 def admin_audit_event_names():
     rows = db.session.query(AuditEvent.event).distinct().order_by(AuditEvent.event).all()
     return jsonify({"events": [r[0] for r in rows]})
+
+
+# ---------------------------------------------------------------------------
+# Access log (per-request trail)
+# ---------------------------------------------------------------------------
+
+
+@api.route("/admin/access-logs", methods=["GET"])
+@token_auth_required
+@scope_required("admin")
+@permission_required_api(Permission.VIEW_AUDIT)
+def admin_access_log():
+    """Per-request access trail: ``?q=`` ``?method=`` ``?status=2xx`` ``?page=``."""
+    filters = {
+        "q": request.args.get("q", "").strip(),
+        "method": request.args.get("method", "").strip().upper(),
+        "status": request.args.get("status", "").strip().lower(),
+    }
+    # Who read the access trail is audited too.
+    record_audit(
+        Event.ACCESS_LOG_VIEWED,
+        actor=g.current_user,
+        detail={"filters": filters, "via": "api"},
+    )
+
+    query = AccessLog.query
+    if filters["q"]:
+        like = f"%{escape_like(filters['q'])}%"
+        query = query.filter(
+            or_(
+                AccessLog.path.ilike(like, escape="\\"),
+                AccessLog.user_label.ilike(like, escape="\\"),
+                AccessLog.ip.ilike(like, escape="\\"),
+            )
+        )
+    if filters["method"]:
+        query = query.filter(AccessLog.method == filters["method"])
+    if filters["status"] in AccessLog.STATUS_CLASSES:
+        low = int(filters["status"][0]) * 100
+        query = query.filter(AccessLog.status_code >= low, AccessLog.status_code < low + 100)
+
+    page, per_page = _pagination()
+    pagination = query.order_by(AccessLog.timestamp.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    return jsonify(
+        {
+            "access_logs": [row.to_json() for row in pagination.items],
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "current_page": pagination.page,
+        }
+    )

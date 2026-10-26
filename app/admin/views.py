@@ -1,6 +1,10 @@
 """Admin console: dashboard, user lifecycle, role/permission and audit views."""
 
-from flask import abort, current_app, flash, redirect, render_template, request, url_for
+import csv
+import io
+import json
+
+from flask import Response, abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import and_, or_
 
@@ -8,6 +12,7 @@ from .. import db
 from ..decorators import audit_required, manage_users_required
 from ..email import send_email
 from ..models import (
+    AccessLog,
     ApiToken,
     AuditEvent,
     Permission,
@@ -19,7 +24,9 @@ from ..models import (
 )
 from ..security import (
     Event,
+    active_administrator_count,
     administrator_count,
+    escape_like,
     record_audit,
     revoke_user_sessions,
 )
@@ -55,6 +62,7 @@ def dashboard():
         "active_sessions": UserSession.query.filter_by(revoked_at=None).count(),
         "issued_tokens": ApiToken.query.filter_by(revoked_at=None).count(),
         "audit_events": AuditEvent.query.count(),
+        "access_logs": AccessLog.query.count(),
     }
     recent = AuditEvent.query.order_by(AuditEvent.timestamp.desc()).limit(12).all()
     return render_template("admin/dashboard.html", stats=stats, recent=recent)
@@ -77,9 +85,13 @@ def users():
     query = User.query
     q = (request.args.get("q") or "").strip()
     if q:
-        like = f"%{q}%"
+        like = f"%{escape_like(q)}%"
         query = query.filter(
-            or_(User.username.ilike(like), User.email.ilike(like), User.name.ilike(like))
+            or_(
+                User.username.ilike(like, escape="\\"),
+                User.email.ilike(like, escape="\\"),
+                User.name.ilike(like, escape="\\"),
+            )
         )
     role = (request.args.get("role") or "").strip()
     if role:
@@ -114,17 +126,26 @@ def user_detail(id):
         action = request.form.get("action", "")
 
         if user.deleted_at:
-            flash("This account has been deleted; no further actions are possible.")
+            flash("This account has been deleted; no further actions are possible.", "error")
             return redirect(url_for("admin.user_detail", id=id))
 
         if action == "role":
             role = db.session.get(Role, request.form.get("role_id", type=int))
             if role is None:
-                flash("Unknown role.")
+                flash("Unknown role.", "error")
             elif user == actor:
-                flash("Use another administrator account to change your own role.")
-            elif user.can(Permission.ADMIN) and not role.has_admin and administrator_count() <= 1:
-                flash("Cannot demote the last administrator.")
+                flash("Use another administrator account to change your own role.", "error")
+            elif role.has_admin and not actor.can(Permission.ADMIN):
+                # A MANAGE_USERS-only operator must not be able to mint a new
+                # administrator (privilege escalation).
+                flash("Only administrators can grant the Administrator permission.", "error")
+            elif (
+                user.active
+                and user.can(Permission.ADMIN)
+                and not role.has_admin
+                and active_administrator_count(exclude_user_id=user.id) == 0
+            ):
+                flash("Cannot demote the last administrator.", "error")
             else:
                 old_role = user.role.name if user.role else None
                 user.role = role
@@ -138,23 +159,29 @@ def user_detail(id):
                     commit=False,
                 )
                 db.session.commit()
-                flash(f"{user.username} is now {role.name}.")
+                flash(f"{user.username} is now {role.name}.", "success")
 
         elif action == "toggle_active":
             if user == actor:
-                flash("You cannot disable your own account.")
-            elif user.active and user.can(Permission.ADMIN) and administrator_count() <= 1:
-                flash("Cannot disable the last administrator.")
+                flash("You cannot disable your own account.", "error")
+            elif (
+                user.active
+                and user.can(Permission.ADMIN)
+                and active_administrator_count(exclude_user_id=user.id) == 0
+            ):
+                flash("Cannot disable the last administrator.", "error")
             else:
                 user.active = not user.active
                 if user.active:
                     user.reset_login_failures()
                     event = Event.USER_ENABLED
                     message = "Account enabled."
+                    category = "success"
                 else:
                     user.revoke_sessions()
                     event = Event.USER_DISABLED
                     message = "Account disabled and sessions revoked."
+                    category = "success"
                 record_audit(
                     event,
                     actor=actor,
@@ -164,7 +191,7 @@ def user_detail(id):
                     commit=False,
                 )
                 db.session.commit()
-                flash(message)
+                flash(message, category)
 
         elif action == "unlock":
             was_locked = user.is_locked
@@ -180,7 +207,10 @@ def user_detail(id):
                     commit=False,
                 )
             db.session.commit()
-            flash("Account unlocked." if was_locked else "Account was not locked.")
+            if was_locked:
+                flash("Account unlocked.", "success")
+            else:
+                flash("Account was not locked.", "info")
 
         elif action == "confirm":
             user.confirmed = True
@@ -195,13 +225,13 @@ def user_detail(id):
                 commit=False,
             )
             db.session.commit()
-            flash("Account marked as confirmed.")
+            flash("Account marked as confirmed.", "success")
 
         elif action == "revoke_sessions":
             revoked = revoke_user_sessions(
                 user, detail={"by": actor.email, "reason": "admin_console"}
             )
-            flash(f"Revoked {revoked} session(s).")
+            flash(f"Revoked {revoked} session(s).", "success")
 
         elif action == "force_password_change":
             user.must_change_password = not user.must_change_password
@@ -220,14 +250,19 @@ def user_detail(id):
             flash(
                 "User must change their password at next sign-in."
                 if required
-                else "Forced password change cleared."
+                else "Forced password change cleared.",
+                "success",
             )
 
         elif action == "delete_user":
             if user == actor:
-                flash("You cannot delete your own account here; use your security page.")
-            elif user.can(Permission.ADMIN) and administrator_count() <= 1:
-                flash("Cannot delete the last administrator.")
+                flash("You cannot delete your own account here; use your security page.", "error")
+            elif (
+                user.active
+                and user.can(Permission.ADMIN)
+                and active_administrator_count(exclude_user_id=user.id) == 0
+            ):
+                flash("Cannot delete the last administrator.", "error")
             else:
                 user.revoke_sessions()
                 user.anonymize()
@@ -241,7 +276,10 @@ def user_detail(id):
                     commit=False,
                 )
                 db.session.commit()
-                flash("Account deleted; their posts remain under an anonymous tombstone.")
+                flash(
+                    "Account deleted; their posts remain under an anonymous tombstone.",
+                    "success",
+                )
 
         elif action == "reset_mfa":
             user.disable_mfa()
@@ -255,7 +293,7 @@ def user_detail(id):
                 commit=False,
             )
             db.session.commit()
-            flash("Two-factor authentication has been reset for this user.")
+            flash("Two-factor authentication has been reset for this user.", "success")
 
         elif action == "send_reset":
             token = user.generate_reset_token()
@@ -275,10 +313,10 @@ def user_detail(id):
                 commit=False,
             )
             db.session.commit()
-            flash(f"Password reset email sent to {user.email}.")
+            flash(f"Password reset email sent to {user.email}.", "success")
 
         else:
-            flash("Unknown action.")
+            flash("Unknown action.", "error")
 
         return redirect(url_for("admin.user_detail", id=user.id))
 
@@ -331,23 +369,23 @@ def role_new():
     if form.validate_on_submit():
         name = form.name.data.strip()
         if Role.query.filter_by(name=name).first() is not None:
-            flash(f"Role '{name}' already exists.")
-        else:
-            role = Role(
-                name=name, permissions=Role.permission_value(form.permission_names()), default=False
-            )
-            db.session.add(role)
-            record_audit(
-                Event.ROLE_CREATED,
-                actor=current_user._get_current_object(),
-                target_type="role",
-                target_label=name,
-                detail={"permissions": form.permission_names()},
-                commit=False,
-            )
-            db.session.commit()
-            flash(f"Role '{name}' created.")
-            return redirect(url_for("admin.roles"))
+            flash(f"Role '{name}' already exists.", "error")
+            return redirect(url_for("admin.role_new"))
+        role = Role(
+            name=name, permissions=Role.permission_value(form.permission_names()), default=False
+        )
+        db.session.add(role)
+        record_audit(
+            Event.ROLE_CREATED,
+            actor=current_user._get_current_object(),
+            target_type="role",
+            target_label=name,
+            detail={"permissions": form.permission_names()},
+            commit=False,
+        )
+        db.session.commit()
+        flash(f"Role '{name}' created.", "success")
+        return redirect(url_for("admin.roles"))
     return render_template("admin/role_form.html", form=form, title="New Role", role=None)
 
 
@@ -361,33 +399,41 @@ def role_edit(id):
     if form.validate_on_submit():
         new_name = form.name.data.strip()
         if role.is_builtin and new_name != role.name:
-            flash("Built-in roles cannot be renamed.")
-        elif new_name != role.name and Role.query.filter_by(name=new_name).first() is not None:
-            flash(f"Role '{new_name}' already exists.")
-        else:
-            permissions = Role.permission_value(form.permission_names())
-            loses_admin = role.has_admin and not permissions & Permission.ADMIN
-            if loses_admin and role.user_count > 0 and administrator_count() <= 1:
-                flash("Cannot remove the ADMIN permission from the last administrator.")
-            else:
-                detail = {"name": new_name, "permissions": form.permission_names()}
-                if new_name != role.name:
-                    detail["old_name"] = role.name
-                role.name = new_name
-                role.permissions = permissions
-                db.session.add(role)
-                record_audit(
-                    Event.ROLE_UPDATED,
-                    actor=current_user._get_current_object(),
-                    target_type="role",
-                    target_id=role.id,
-                    target_label=role.name,
-                    detail=detail,
-                    commit=False,
-                )
-                db.session.commit()
-                flash(f"Role '{role.name}' updated.")
-                return redirect(url_for("admin.roles"))
+            flash("Built-in roles cannot be renamed.", "error")
+            return redirect(url_for("admin.role_edit", id=role.id))
+        if new_name != role.name and Role.query.filter_by(name=new_name).first() is not None:
+            flash(f"Role '{new_name}' already exists.", "error")
+            return redirect(url_for("admin.role_edit", id=role.id))
+        permissions = Role.permission_value(form.permission_names())
+        loses_admin = role.has_admin and not permissions & Permission.ADMIN
+        # Only an *active* administrator elsewhere can absorb this role losing
+        # the ADMIN permission; counting disabled accounts (or this role's own
+        # holders) would allow zeroing out the administrators.
+        if (
+            loses_admin
+            and role.user_count > 0
+            and active_administrator_count(exclude_role_id=role.id) == 0
+        ):
+            flash("Cannot remove the ADMIN permission from the last administrator role.", "error")
+            return redirect(url_for("admin.role_edit", id=role.id))
+        detail = {"name": new_name, "permissions": form.permission_names()}
+        if new_name != role.name:
+            detail["old_name"] = role.name
+        role.name = new_name
+        role.permissions = permissions
+        db.session.add(role)
+        record_audit(
+            Event.ROLE_UPDATED,
+            actor=current_user._get_current_object(),
+            target_type="role",
+            target_id=role.id,
+            target_label=role.name,
+            detail=detail,
+            commit=False,
+        )
+        db.session.commit()
+        flash(f"Role '{role.name}' updated.", "success")
+        return redirect(url_for("admin.roles"))
     elif request.method == "GET":
         form.name.data = role.name
         form.load_permissions(role.permissions)
@@ -401,11 +447,11 @@ def role_delete(id):
         abort(403)
     role = db.get_or_404(Role, id)
     if role.is_builtin:
-        flash("Built-in roles cannot be deleted.")
+        flash("Built-in roles cannot be deleted.", "error")
     elif role.user_count > 0:
-        flash("Reassign users away from this role before deleting it.")
+        flash("Reassign users away from this role before deleting it.", "error")
     elif role.default:
-        flash("The default role cannot be deleted.")
+        flash("The default role cannot be deleted.", "error")
     else:
         name = role.name
         db.session.delete(role)
@@ -417,7 +463,7 @@ def role_delete(id):
             commit=False,
         )
         db.session.commit()
-        flash(f"Role '{name}' deleted.")
+        flash(f"Role '{name}' deleted.", "success")
     return redirect(url_for("admin.roles"))
 
 
@@ -425,24 +471,60 @@ def role_delete(id):
 # Audit trail
 # ---------------------------------------------------------------------------
 
+_AUDIT_EXPORT_COLUMNS = (
+    "id",
+    "timestamp",
+    "event",
+    "actor",
+    "target_type",
+    "target_id",
+    "target",
+    "success",
+    "ip",
+    "user_agent",
+    "detail",
+)
+
+
+def _audit_filters():
+    """Active audit-log filters (shared by the console view and the export)."""
+    return {
+        "event": (request.args.get("event") or "").strip(),
+        "success": (request.args.get("success") or "").strip(),
+        "q": (request.args.get("q") or "").strip(),
+    }
+
+
+def _filtered_audit_query():
+    filters = _audit_filters()
+    query = AuditEvent.query
+    if filters["event"]:
+        query = query.filter(AuditEvent.event == filters["event"])
+    if filters["success"] in ("0", "1"):
+        query = query.filter(AuditEvent.success.is_(filters["success"] == "1"))
+    if filters["q"]:
+        like = f"%{escape_like(filters['q'])}%"
+        query = query.filter(
+            or_(
+                AuditEvent.actor_label.ilike(like, escape="\\"),
+                AuditEvent.target_label.ilike(like, escape="\\"),
+            )
+        )
+    return query
+
 
 @admin.route("/audit")
 @login_required
 @audit_required
 def audit_log():
-    query = AuditEvent.query
-    event = (request.args.get("event") or "").strip()
-    if event:
-        query = query.filter(AuditEvent.event == event)
-    success = (request.args.get("success") or "").strip()
-    if success in ("0", "1"):
-        query = query.filter(AuditEvent.success.is_(success == "1"))
-    q = (request.args.get("q") or "").strip()
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            or_(AuditEvent.actor_label.ilike(like), AuditEvent.target_label.ilike(like))
-        )
+    # Reading the audit trail is itself an auditable action: record it before
+    # running the query so the viewer sees their own access on the page.
+    record_audit(
+        Event.AUDIT_VIEWED,
+        actor=current_user._get_current_object(),
+        detail={"filters": _audit_filters()},
+    )
+    query = _filtered_audit_query()
 
     page = _page()
     pagination = query.order_by(AuditEvent.timestamp.desc()).paginate(
@@ -455,5 +537,127 @@ def audit_log():
         pagination=pagination,
         page=page,
         event_names=sorted(event_names),
-        filters={"event": event, "success": success, "q": q},
+        filters=_audit_filters(),
+    )
+
+
+@admin.route("/audit/export")
+@login_required
+@audit_required
+def audit_export():
+    """Download the (filtered) audit trail as CSV or JSON."""
+    fmt = (request.args.get("format") or "csv").strip().lower()
+    if fmt not in ("csv", "json"):
+        abort(400)
+
+    query = _filtered_audit_query()
+    rows = query.order_by(AuditEvent.timestamp.desc()).all()
+    filters = _audit_filters()
+    record_audit(
+        Event.AUDIT_EXPORTED,
+        actor=current_user._get_current_object(),
+        detail={"format": fmt, "count": len(rows), "filters": filters},
+    )
+
+    if fmt == "json":
+        payload = json.dumps(
+            {
+                "exported_at": utc_now().isoformat(),
+                "filters": filters,
+                "count": len(rows),
+                "events": [row.to_json() for row in rows],
+            },
+            indent=2,
+        )
+        return Response(
+            payload,
+            mimetype="application/json",
+            headers={"Content-Disposition": 'attachment; filename="audit-log.json"'},
+        )
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(_AUDIT_EXPORT_COLUMNS)
+    for row in rows:
+        writer.writerow(
+            [
+                row.id,
+                row.timestamp.isoformat() if row.timestamp else "",
+                row.event,
+                row.actor_label or "",
+                row.target_type or "",
+                row.target_id if row.target_id is not None else "",
+                row.target_label or "",
+                int(bool(row.success)),
+                row.ip or "",
+                row.user_agent or "",
+                row.detail or "",
+            ]
+        )
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="audit-log.csv"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Access log (per-request trail)
+# ---------------------------------------------------------------------------
+
+
+def _access_filters():
+    """Active access-log filters (shared by the console view and the API)."""
+    return {
+        "q": (request.args.get("q") or "").strip(),
+        "method": (request.args.get("method") or "").strip().upper(),
+        "status": (request.args.get("status") or "").strip().lower(),
+    }
+
+
+def _filtered_access_query(filters=None):
+    filters = filters if filters is not None else _access_filters()
+    query = AccessLog.query
+    if filters["q"]:
+        like = f"%{escape_like(filters['q'])}%"
+        query = query.filter(
+            or_(
+                AccessLog.path.ilike(like, escape="\\"),
+                AccessLog.user_label.ilike(like, escape="\\"),
+                AccessLog.ip.ilike(like, escape="\\"),
+            )
+        )
+    if filters["method"]:
+        query = query.filter(AccessLog.method == filters["method"])
+    if filters["status"] in AccessLog.STATUS_CLASSES:
+        low = int(filters["status"][0]) * 100
+        query = query.filter(AccessLog.status_code >= low, AccessLog.status_code < low + 100)
+    else:
+        filters["status"] = ""
+    return query
+
+
+@admin.route("/access-logs")
+@login_required
+@audit_required
+def access_log():
+    filters = _access_filters()
+    # Who read the access trail is auditable, exactly like the audit trail.
+    record_audit(
+        Event.ACCESS_LOG_VIEWED,
+        actor=current_user._get_current_object(),
+        detail={"filters": filters},
+    )
+    query = _filtered_access_query(filters)
+
+    page = _page()
+    pagination = query.order_by(AccessLog.timestamp.desc()).paginate(
+        page=page, per_page=_per_page("BLOGG_ACCESS_LOG_PER_PAGE"), error_out=False
+    )
+    return render_template(
+        "admin/access_logs.html",
+        logs=pagination.items,
+        pagination=pagination,
+        page=page,
+        filters=filters,
     )

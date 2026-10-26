@@ -19,6 +19,18 @@
   --primary-hover: #4338ca;
   --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
   --card-hover-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.06), 0 6px 12px -6px rgba(0, 0, 0, 0.04);
+  --alert-warning-bg: #fef3c7;
+  --alert-warning-text: #92400e;
+  --alert-warning-border: #f59e0b;
+  --alert-info-bg: #e0e7ff;
+  --alert-info-text: #3730a3;
+  --alert-info-border: #6366f1;
+  --alert-success-bg: #d1fae5;
+  --alert-success-text: #065f46;
+  --alert-success-border: #10b981;
+  --alert-danger-bg: #fee2e2;
+  --alert-danger-text: #991b1b;
+  --alert-danger-border: #ef4444;
 }
 
 [data-theme="dark"] {
@@ -36,6 +48,18 @@
   --primary-hover: #818cf8;
   --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
   --card-hover-shadow: 0 14px 28px -6px rgba(0, 0, 0, 0.4);
+  --alert-warning-bg: #45320b;
+  --alert-warning-text: #fde68a;
+  --alert-warning-border: #f59e0b;
+  --alert-info-bg: #242c54;
+  --alert-info-text: #c7d2fe;
+  --alert-info-border: #6366f1;
+  --alert-success-bg: #0b3d2e;
+  --alert-success-text: #a7f3d0;
+  --alert-success-border: #10b981;
+  --alert-danger-bg: #451a1a;
+  --alert-danger-text: #fecaca;
+  --alert-danger-border: #ef4444;
 }
 
 /* --- Base Typography & Body --- */
@@ -52,6 +76,175 @@ body {
 h1, h2, h3, h4, h5, h6 {
   color: var(--text-main);
   font-weight: 700;
+}
+
+/* --- Dark Theme: Bootstrap Component Overrides --- */
+/* Bootstrap ships light-only colors for these components; without these
+   overrides panels, wells, tables and form hints stay light-on-dark. */
+[data-theme="dark"] .panel {
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .panel-default {
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .panel-default > .panel-heading {
+  background-color: var(--bg-subtle);
+  color: var(--text-main);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .panel-body {
+  background-color: var(--bg-card);
+  color: var(--text-body);
+}
+
+[data-theme="dark"] .panel-danger {
+  border-color: #7f1d1d;
+}
+
+[data-theme="dark"] .panel-danger > .panel-heading {
+  background-color: #7f1d1d;
+  color: #fecaca;
+  border-color: #7f1d1d;
+}
+
+[data-theme="dark"] .well {
+  background-color: var(--bg-subtle);
+  border-color: var(--border-color);
+  color: var(--text-body);
+  box-shadow: none;
+}
+
+[data-theme="dark"] .table {
+  color: var(--text-body);
+}
+
+[data-theme="dark"] .table > thead > tr > th,
+[data-theme="dark"] .table > tbody > tr > th,
+[data-theme="dark"] .table > tfoot > tr > th,
+[data-theme="dark"] .table > thead > tr > td,
+[data-theme="dark"] .table > tbody > tr > td,
+[data-theme="dark"] .table > tfoot > tr > td {
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .table > thead > tr > th {
+  background-color: var(--bg-subtle);
+  color: var(--text-main);
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd),
+[data-theme="dark"] .table-hover > tbody > tr:hover {
+  background-color: var(--bg-subtle);
+}
+
+[data-theme="dark"] .table-condensed > tbody > tr > td {
+  background-color: var(--bg-card);
+}
+
+[data-theme="dark"] .nav-tabs {
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .nav-tabs > li > a {
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .nav-tabs > li.active > a,
+[data-theme="dark"] .nav-tabs > li.active > a:hover,
+[data-theme="dark"] .nav-tabs > li.active > a:focus {
+  color: var(--text-main);
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .help-block,
+[data-theme="dark"] .text-muted {
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .has-error .help-block,
+[data-theme="dark"] .has-error .control-label,
+[data-theme="dark"] .has-error .form-control {
+  color: #fca5a5;
+  border-color: #b91c1c;
+}
+
+[data-theme="dark"] .has-success .help-block,
+[data-theme="dark"] .has-success .control-label {
+  color: #6ee7b7;
+}
+
+[data-theme="dark"] .has-warning .help-block,
+[data-theme="dark"] .has-warning .control-label {
+  color: #fde68a;
+}
+
+[data-theme="dark"] .form-control[disabled],
+[data-theme="dark"] .form-control[readonly] {
+  background-color: var(--bg-subtle);
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .form-control::placeholder {
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .checkbox label,
+[data-theme="dark"] .radio label {
+  color: var(--text-body);
+}
+
+[data-theme="dark"] pre {
+  background-color: #080c14;
+  color: #f8fafc;
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] code {
+  background-color: var(--bg-subtle);
+  color: #f8fafc;
+}
+
+[data-theme="dark"] pre code {
+  background-color: transparent;
+  color: inherit;
+}
+
+[data-theme="dark"] .label-default {
+  background-color: var(--bg-subtle);
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .label-primary {
+  background-color: var(--primary);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .label-success {
+  background-color: #059669;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .label-danger {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .close {
+  color: #ffffff;
+  text-shadow: none;
+  filter: opacity(0.7);
+}
+
+[data-theme="dark"] .close:hover,
+[data-theme="dark"] .close:focus {
+  filter: opacity(1);
 }
 
 /* --- Modern Navbar (Properly Centered) --- */
@@ -308,27 +501,27 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .alert-warning {
-  background-color: #fef3c7;
-  color: #92400e;
-  border-left: 4px solid #f59e0b;
+  background-color: var(--alert-warning-bg);
+  color: var(--alert-warning-text);
+  border-left: 4px solid var(--alert-warning-border);
 }
 
 .alert-info {
-  background-color: #e0e7ff;
-  color: #3730a3;
-  border-left: 4px solid #6366f1;
+  background-color: var(--alert-info-bg);
+  color: var(--alert-info-text);
+  border-left: 4px solid var(--alert-info-border);
 }
 
 .alert-success {
-  background-color: #d1fae5;
-  color: #065f46;
-  border-left: 4px solid #10b981;
+  background-color: var(--alert-success-bg);
+  color: var(--alert-success-text);
+  border-left: 4px solid var(--alert-success-border);
 }
 
 .alert-danger {
-  background-color: #fee2e2;
-  color: #991b1b;
-  border-left: 4px solid #ef4444;
+  background-color: var(--alert-danger-bg);
+  color: var(--alert-danger-text);
+  border-left: 4px solid var(--alert-danger-border);
 }
 
 /* --- Modern Post Cards --- */
@@ -714,6 +907,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* --- Followers Table --- */
+/* Clipped content (long usernames) scrolls horizontally inside the
+   .table-responsive wrapper; corner radii on the header cells keep the
+   rounded look now that overflow:hidden no longer does the clipping. */
 .followers-table {
   width: 100%;
   border-collapse: separate;
@@ -722,7 +918,6 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid var(--border-color);
   border-radius: 12px;
   box-shadow: var(--card-shadow);
-  overflow: hidden;
   margin-bottom: 24px;
 }
 
@@ -731,6 +926,15 @@ h1, h2, h3, h4, h5, h6 {
   padding: 14px 18px;
   text-align: left;
   border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.followers-table th:first-child {
+  border-top-left-radius: 11px;
+}
+
+.followers-table th:last-child {
+  border-top-right-radius: 11px;
 }
 
 .followers-table th {
@@ -1140,5 +1344,72 @@ h1, h2, h3, h4, h5, h6 {
 .auth-register-link:hover {
   color: var(--primary-hover);
   text-decoration: underline;
+}
+
+/* --- Unconfirmed Account Notice --- */
+.unconfirmed-card {
+  max-width: 500px;
+  margin: 20px auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 32px 28px;
+  text-align: center;
+  box-shadow: var(--card-shadow);
+}
+
+.unconfirmed-card h1 {
+  font-size: 26px;
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.unconfirmed-card h3 {
+  color: #ef4444;
+  font-size: 18px;
+  margin-top: 0;
+}
+
+.unconfirmed-card p {
+  color: var(--text-muted);
+  margin: 12px 0;
+}
+
+.unconfirmed-card .btn {
+  margin-top: 6px;
+}
+
+/* --- Error Pages (400/403/404/405/429/500) --- */
+.error-card {
+  max-width: 520px;
+  margin: 30px auto 60px auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 40px 30px;
+  text-align: center;
+  box-shadow: var(--card-shadow);
+}
+
+.error-card .error-code {
+  font-size: 72px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--primary);
+  letter-spacing: -2px;
+}
+
+.error-card h2 {
+  margin: 12px 0;
+}
+
+.error-card p {
+  color: var(--text-muted);
+  font-size: 16px;
+  margin: 12px 0;
+}
+
+.error-card .btn {
+  margin-top: 10px;
 }
 

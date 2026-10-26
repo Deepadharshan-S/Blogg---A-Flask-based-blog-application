@@ -5,6 +5,7 @@ from flask_migrate import Migrate, upgrade
 
 from app import create_app, db
 from app.models import (
+    AccessLog,
     ApiToken,
     AuditEvent,
     Comment,
@@ -30,6 +31,7 @@ def make_shell_context():
         Comment=Comment,
         Permission=Permission,
         AuditEvent=AuditEvent,
+        AccessLog=AccessLog,
         PasswordHistory=PasswordHistory,
         UserSession=UserSession,
         ApiToken=ApiToken,

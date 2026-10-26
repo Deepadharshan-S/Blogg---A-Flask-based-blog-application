@@ -49,6 +49,24 @@ class Config:
     BLOGG_LOGIN_RATE_LIMIT = os.environ.get("BLOGG_LOGIN_RATE_LIMIT", "5 per minute")
     BLOGG_ADMIN_PER_PAGE = 20
     BLOGG_AUDIT_PER_PAGE = 30
+    BLOGG_ACCESS_LOG_PER_PAGE = 30
+
+    # --- Audit & access log settings ---
+    # Structured per-request access trail (Admin console -> Access Log).
+    BLOGG_ACCESS_LOG_ENABLED = os.environ.get("BLOGG_ACCESS_LOG_ENABLED", "true").lower() in [
+        "true",
+        "on",
+        "1",
+    ]
+    # Comma-separated path prefixes that are never written to the access log.
+    BLOGG_ACCESS_LOG_EXCLUDE_PREFIXES = tuple(
+        p.strip()
+        for p in os.environ.get("BLOGG_ACCESS_LOG_EXCLUDE_PREFIXES", "/static").split(",")
+        if p.strip()
+    )
+    # Retention windows (days) enforced by `flask prune-logs`; 0 keeps records forever.
+    BLOGG_ACCESS_LOG_RETENTION_DAYS = int(os.environ.get("BLOGG_ACCESS_LOG_RETENTION_DAYS", "0"))
+    BLOGG_AUDIT_RETENTION_DAYS = int(os.environ.get("BLOGG_AUDIT_RETENTION_DAYS", "0"))
 
     # Rate limiting: in-memory by default (tests/dev), persistent in production.
     RATELIMIT_STORAGE_URI = "memory://"

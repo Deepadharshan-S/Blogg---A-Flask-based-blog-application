@@ -38,7 +38,9 @@ class AuthRoutesTestCase(unittest.TestCase):
         self.app_context.pop()
 
     def _get_csrf_token(self):
-        response = self.client.get("/")
+        # follow_redirects: unconfirmed users are bounced from "/" to
+        # /auth/unconfirmed, which still carries the csrf meta tag.
+        response = self.client.get("/", follow_redirects=True)
         match = re.search(
             r'<meta name="csrf-token" content="([^"]+)">', response.get_data(as_text=True)
         )
@@ -327,7 +329,17 @@ class AuthRoutesTestCase(unittest.TestCase):
 
         self._login("resend@example.com", "Password123!")
 
-        res = self.client.get("/auth/confirm", follow_redirects=True)
+        # POST-only: a GET must no longer trigger the email.
+        res_get = self.client.get("/auth/confirm")
+        self.assertEqual(res_get.status_code, 405)
+        mock_send_email.assert_not_called()
+
+        token = self._get_csrf_token()
+        res = self.client.post(
+            "/auth/confirm",
+            headers={"X-CSRFToken": token},
+            follow_redirects=True,
+        )
         self.assertEqual(res.status_code, 200)
         self.assertIn("A new confirmation email has been sent", res.get_data(as_text=True))
         mock_send_email.assert_called_once()

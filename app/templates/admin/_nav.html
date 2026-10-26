@@ -12,5 +12,8 @@
   <li {% if active == 'audit' %}class="active"{% endif %}>
     <a href="{{ url_for('admin.audit_log') }}">Audit Log</a>
   </li>
+  <li {% if active == 'access' %}class="active"{% endif %}>
+    <a href="{{ url_for('admin.access_log') }}">Access Log</a>
+  </li>
   {% endif %}
 </ul>

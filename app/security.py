@@ -12,11 +12,12 @@ import uuid
 from datetime import timedelta, timezone
 
 import qrcode
-from flask import current_app, has_request_context, request, session
-from flask_login import login_user, logout_user
+from flask import current_app, g, has_request_context, request, session
+from flask_login import current_user, login_user, logout_user
 
 from . import db
 from .models import (
+    AccessLog,
     ApiToken,
     AuditEvent,
     Permission,
@@ -66,6 +67,13 @@ class Event:
     ROLE_CREATED = "admin.role.created"
     ROLE_UPDATED = "admin.role.updated"
     ROLE_DELETED = "admin.role.deleted"
+    COMMENT_MODERATED = "moderation.comment.toggled"
+    # Log lifecycle: reading, exporting and pruning the trails are themselves
+    # security-relevant actions and therefore audited.
+    AUDIT_VIEWED = "audit.viewed"
+    AUDIT_EXPORTED = "audit.exported"
+    ACCESS_LOG_VIEWED = "access_log.viewed"
+    LOGS_PRUNED = "logs.pruned"
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +139,115 @@ def record_audit(
 
 
 # ---------------------------------------------------------------------------
+# Access log (structured per-request trail)
+# ---------------------------------------------------------------------------
+
+# Path prefixes whose remainder is redacted before a row is stored: these
+# routes carry single-use tokens that must never leak through the log.
+_SENSITIVE_PATH_PREFIXES = ("/auth/reset/", "/auth/confirm/", "/auth/change_email/")
+
+
+def sanitize_path(path):
+    """Redact one-time tokens embedded in a URL path.
+
+    Query strings are never stored (``request.path`` only), so this is the
+    last place a secret could travel through the access log.
+    """
+    path = path or "/"
+    for prefix in _SENSITIVE_PATH_PREFIXES:
+        if path.startswith(prefix):
+            return (prefix + "***")[:256]
+    return path[:256]
+
+
+def _request_identity():
+    """Resolve the principal the request acted as, or ``None`` for anonymous.
+
+    The REST API authorizes via ``g.current_user`` (Bearer/Basic), the web UI
+    via the Flask-Login session proxy; whichever applies wins so API rows never
+    inherit a stale browser-session identity.
+    """
+    identity = None
+    if has_request_context() and request.blueprint == "api":
+        identity = g.get("current_user")
+    if identity is None:
+        identity = current_user
+    if getattr(identity, "is_authenticated", False):
+        user = getattr(identity, "_get_current_object", lambda: identity)()
+        return user, getattr(user, "email", None)
+    return None, None
+
+
+def record_access(response, duration_ms=None):
+    """Append a structured access-log row for the request being answered.
+
+    Never raises: a failure to log access must not break the response.
+    """
+    try:
+        if not has_request_context():
+            return None
+        if not current_app.config.get("BLOGG_ACCESS_LOG_ENABLED", True):
+            return None
+        path = request.path or "/"
+        for prefix in current_app.config.get("BLOGG_ACCESS_LOG_EXCLUDE_PREFIXES") or ():
+            if path.startswith(prefix):
+                return None
+        user, user_label = _request_identity()
+        entry = AccessLog(
+            user_id=getattr(user, "id", None),
+            user_label=(user_label or "")[:128] or None,
+            method=request.method,
+            path=sanitize_path(path),
+            endpoint=(request.endpoint or "")[:128] or None,
+            status_code=response.status_code,
+            duration_ms=duration_ms,
+            ip=client_ip(),
+            user_agent=client_user_agent(),
+            is_api=path.startswith("/api/"),
+        )
+        db.session.add(entry)
+        db.session.commit()
+        return entry
+    except Exception:  # noqa: BLE001 - logging must never break a response
+        db.session.rollback()
+        current_app.logger.exception(
+            "Failed to record access log for %s", getattr(request, "path", "?")
+        )
+        return None
+
+
+def prune_expired_logs(commit=True):
+    """Delete audit and access records older than their retention windows.
+
+    Retention is configured with ``BLOGG_AUDIT_RETENTION_DAYS`` and
+    ``BLOGG_ACCESS_LOG_RETENTION_DAYS``; 0 (the default) keeps everything.
+    Pruning is itself audited. Returns per-table deletion counts.
+    """
+    now = utc_now()
+    counts = {"audit_events": 0, "access_logs": 0}
+
+    audit_days = int(current_app.config.get("BLOGG_AUDIT_RETENTION_DAYS", 0) or 0)
+    if audit_days > 0:
+        cutoff = now - timedelta(days=audit_days)
+        counts["audit_events"] = AuditEvent.query.filter(AuditEvent.timestamp < cutoff).delete(
+            synchronize_session="fetch"
+        )
+
+    access_days = int(current_app.config.get("BLOGG_ACCESS_LOG_RETENTION_DAYS", 0) or 0)
+    if access_days > 0:
+        cutoff = now - timedelta(days=access_days)
+        counts["access_logs"] = AccessLog.query.filter(AccessLog.timestamp < cutoff).delete(
+            synchronize_session="fetch"
+        )
+
+    if any(counts.values()):
+        record_audit(Event.LOGS_PRUNED, detail=counts, commit=False)
+    if commit:
+        db.session.commit()
+    return counts
+
+
+# ---------------------------------------------------------------------------
 # Authorization guards shared by the admin UI and the admin API
 # ---------------------------------------------------------------------------
 
@@ -142,6 +259,33 @@ def administrator_count():
         .filter((Role.permissions.op("&")(Permission.ADMIN)) == Permission.ADMIN)
         .count()
     )
+
+
+def active_administrator_count(exclude_user_id=None, exclude_role_id=None):
+    """Number of *active* accounts whose role carries the ADMIN permission.
+
+    The last-admin guards use this rather than `administrator_count()`:
+    disabled accounts cannot act, so they must not count towards the
+    "an administrator still exists" arithmetic.
+    """
+    query = User.query.join(Role).filter(
+        (Role.permissions.op("&")(Permission.ADMIN)) == Permission.ADMIN,
+        User.active.is_(True),
+    )
+    if exclude_user_id is not None:
+        query = query.filter(User.id != exclude_user_id)
+    if exclude_role_id is not None:
+        query = query.filter(Role.id != exclude_role_id)
+    return query.count()
+
+
+def escape_like(value):
+    r"""Escape LIKE metacharacters (``\``, ``%``, ``_``) in a user-supplied term.
+
+    Pass the result through ``ilike(pattern, escape="\\")`` so a search for
+    ``100%`` matches literal ``100%`` instead of ``100`` followed by anything.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 # ---------------------------------------------------------------------------

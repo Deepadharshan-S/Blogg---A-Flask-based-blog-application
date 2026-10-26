@@ -6,6 +6,16 @@
 {% block page_content %}
 <div class="page-header">
   <h1>Security Audit Log</h1>
+  <div class="btn-group">
+    <a class="btn btn-default btn-sm"
+       href="{{ url_for('admin.audit_export', format='csv', event=filters.event, success=filters.success, q=filters.q) }}">
+      Export CSV
+    </a>
+    <a class="btn btn-default btn-sm"
+       href="{{ url_for('admin.audit_export', format='json', event=filters.event, success=filters.success, q=filters.q) }}">
+      Export JSON
+    </a>
+  </div>
 </div>
 
 {% set active = 'audit' %}

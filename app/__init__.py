@@ -1,9 +1,10 @@
 import logging
 import os
 import sqlite3
+import time
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, request
+from flask import Flask, g, request
 from flask_bootstrap import Bootstrap
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -75,6 +76,11 @@ def create_app(config_name):
     csrf.exempt(api_blueprint)
     app.register_blueprint(api_blueprint, url_prefix="/api/v1")
 
+    # App-scoped CLI commands (audit/access log retention, ...)
+    from .cli import register_cli_commands
+
+    register_cli_commands(app)
+
     # Configure ProxyFix only if BLOGG_NUM_PROXIES is explicitly configured to > 0
     try:
         num_proxies = int(
@@ -128,6 +134,23 @@ def create_app(config_name):
         if content_type.startswith("text/html") or content_type.startswith("application/json"):
             response.headers["Cache-Control"] = "no-store, private"
             response.headers["Pragma"] = "no-cache"
+        return response
+
+    # IAM: structured access log - one row per request (identity, path, status,
+    # source IP, duration). Static assets and disabled deployments are filtered
+    # inside record_access(); failures there never break the response.
+    from .security import record_access
+
+    @app.before_request
+    def _access_log_start():
+        g.pop("access_log_started", None)
+        g.access_log_started = time.monotonic()
+
+    @app.after_request
+    def _access_log_record(response):
+        started = g.pop("access_log_started", None)
+        duration_ms = int((time.monotonic() - started) * 1000) if started is not None else None
+        record_access(response, duration_ms=duration_ms)
         return response
 
     if not os.path.exists("logs"):

@@ -1,23 +1,20 @@
 {% extends "base.html" %}
   {% import "bootstrap/wtf.html" as wtf %}
-  
+
   {% block title %}Blogg - Edit Post{% endblock %}
-  
+
   {% block page_content %}
-  <div class="container">
-      <div class="edit-post-container">
-          <div class="edit-post-header">
-              Edit Post
-          </div>
-          <div class="edit-post-form">
-              {{ wtf.quick_form(form, button_map={'submit': 'primary'}) }}
-          </div>
+  <div class="edit-post-container">
+      <div class="edit-post-header">
+          Edit Post
+      </div>
+      <div class="edit-post-form">
+          {{ wtf.quick_form(form, button_map={'submit': 'primary'}) }}
       </div>
   </div>
   {% endblock %}
-  
+
   {% block scripts %}
   {{ super() }}
   {{ pagedown.include_pagedown() }}
   {% endblock %}
-  

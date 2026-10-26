@@ -2,14 +2,20 @@
     {% for comment in comments %}
     <li class="comment">
         <div class="comment-thumbnail">
+            {% if comment.author %}
             <a href="{{ url_for('.user', username=comment.author.username) }}">
-                <img class="img-rounded profile-thumbnail" src="{{ comment.author.gravatar(size=40) }}">
+                <img class="img-rounded profile-thumbnail" src="{{ comment.author.gravatar(size=40) }}" alt="{{ comment.author.username }}">
             </a>
+            {% endif %}
         </div>
         <div class="comment-content">
             <div class="comment-date">{{ moment(comment.timestamp).fromNow() }}</div>
             <div class="comment-author">
+                {% if comment.author %}
                 <a href="{{ url_for('.user', username=comment.author.username) }}">{{ comment.author.username }}</a>
+                {% else %}
+                <span class="text-muted">Unknown author</span>
+                {% endif %}
             </div>
             <div class="comment-body">
                 {% if comment.disabled %}

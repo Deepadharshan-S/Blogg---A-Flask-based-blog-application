@@ -16,7 +16,7 @@
     <div class="panel panel-default">
       <div class="panel-heading">{{ title }}</div>
       <div class="panel-body">
-        {{ wtf.quick_form(form, button_map={"submit": "btn btn-primary"}) }}
+        {{ wtf.quick_form(form, button_map={"submit": "primary"}) }}
         <p style="margin-top: 15px;">
           <a href="{{ url_for('admin.roles') }}">&larr; Back to roles</a>
         </p>

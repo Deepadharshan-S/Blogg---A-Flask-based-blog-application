@@ -2,7 +2,7 @@
 
 A full-featured blogging and social networking web application built with **Flask 3.1**, **SQLAlchemy 2.0**, and managed by **uv**.
 
-Blogg ships with a native IAM layer (no external identity provider): multi-factor authentication, role-based access control with an admin console, audit logging, server-side session and API-token management, account lockout, a password policy, and account lifecycle management (forced password change, opt-in password expiry, anonymizing deletion) — all alongside the full blogging feature set.
+Blogg ships with a native IAM layer (no external identity provider): multi-factor authentication, role-based access control with an admin console, audit and access logging, server-side session and API-token management, account lockout, a password policy, and account lifecycle management (forced password change, opt-in password expiry, anonymizing deletion) — all alongside the full blogging feature set.
 
 ---
 
@@ -31,11 +31,13 @@ the same change flow, and the API answers `403 password expired`.
 - **Role-Based Access Control (RBAC) & Admin Console**:
   - Permissions bitmask (`FOLLOW`, `COMMENT`, `WRITE`, `MODERATE`, `ADMIN`, `MANAGE_USERS`, `VIEW_AUDIT`).
   - Roles: `User`, `Moderator`, `Administrator`.
-  - Admin console at `/admin`: dashboard, user management (disable/enable, role change, force password reset, revoke sessions), role & permission editor, and a filterable audit log.
+  - Admin console at `/admin`: dashboard, user management (disable/enable, role change, force password reset, revoke sessions), role & permission editor, a filterable audit log, and the per-request access log.
   - Guardrails: the last Administrator cannot be demoted or disabled, and roles with users cannot be deleted; admins cannot change their own role or disable their own account.
-- **Audit Logging & Login History**:
+- **Audit & Access Logging**:
   - Every security event (login success/failure, lockout, MFA, password/email/role changes, session and token lifecycle, admin actions) recorded in a single `audit_events` stream with IP address and user agent.
-  - Audit log viewer at `/admin/audit` with event/actor/result filters; login history is derived from the same stream.
+  - Audit log viewer at `/admin/audit` with event/actor/result filters; login history is derived from the same stream. Export the (filtered) trail as CSV/JSON, and keep it with a configurable retention window (`flask prune-logs`).
+  - Per-request access log (`access_logs`): every HTTP request is recorded with the acting identity (web session or API token), method, path, status, duration, IP and user agent — query strings are never stored and one-time tokens in paths are redacted. View it at `/admin/access-logs`; static assets are excluded.
+  - Both trails guard themselves: viewing or exporting either log is itself audited (`audit.viewed`, `audit.exported`, `access_log.viewed`), and pruning writes `logs.pruned`.
 - **Session Management**:
   - Server-side sessions (UUID `jti` in the session cookie) with idle and absolute timeouts.
   - Security center (`/auth/security`) lists active devices; revoke any session or all others in one click.
@@ -120,6 +122,10 @@ All IAM settings are optional and default sensibly (see `.env.example` for the f
 | `BLOGG_ENFORCE_MFA_FOR_ADMINS` | `false` | Require MFA for Administrators |
 | `BLOGG_LOGIN_RATE_LIMIT` | `5 per minute` | Login/MFA challenge rate limit |
 | `RATELIMIT_STORAGE_URI` | `memory://` | Rate-limit storage (`filesystem://` in production) |
+| `BLOGG_ACCESS_LOG_ENABLED` | `true` | Record the per-request access trail |
+| `BLOGG_ACCESS_LOG_EXCLUDE_PREFIXES` | `/static` | Comma-separated path prefixes never logged |
+| `BLOGG_ACCESS_LOG_RETENTION_DAYS` | `0` | Access-record retention for `flask prune-logs` (`0` = keep forever) |
+| `BLOGG_AUDIT_RETENTION_DAYS` | `0` | Audit-event retention for `flask prune-logs` (`0` = keep forever) |
 
 ### 4. Database Setup & Migrations
 
@@ -173,12 +179,18 @@ Every signed-in user has a security center at **`/auth/security`**:
 | `/admin/users`, `/admin/users/<id>` | `MANAGE_USERS` | Search users; change role, disable/enable, force password reset, require password change, reset MFA, revoke sessions, delete account (tombstone) |
 | `/admin/roles`, `/admin/roles/<id>/edit` | `ADMIN` | Create/edit/delete roles and their permission bitmask |
 | `/admin/audit` | `VIEW_AUDIT` | Filterable audit log and login history |
+| `/admin/audit/export` | `VIEW_AUDIT` | Download the (filtered) audit trail as CSV or JSON |
+| `/admin/access-logs` | `VIEW_AUDIT` | Per-request access trail (identity, path, status, duration, IP) |
 
 Guardrails enforced in both the console and the API: the **last Administrator** cannot be demoted, disabled, deleted, or delete themselves, and **roles with users** cannot be deleted. Deleted accounts become anonymized tombstones (`deleted_<id>`): they keep their authored content, lose every credential, and refuse further admin actions.
 
 ### Audit Events
 
-Security-relevant actions are written to the `audit_events` table with event name, actor, target, success flag, detail payload (JSON), IP address, and user agent — e.g. `auth.login.success`, `auth.login.failed`, `auth.login.locked`, `mfa.enabled`, `password.changed`, `session.revoked`, `session.expired`, `token.created`, `user.role_changed`, `user.password_change_required`, `user.deleted`. The admin audit view and login history both read from this single stream.
+Security-relevant actions are written to the `audit_events` table with event name, actor, target, success flag, detail payload (JSON), IP address, and user agent — e.g. `auth.login.success`, `auth.login.failed`, `auth.login.locked`, `mfa.enabled`, `password.changed`, `session.revoked`, `session.expired`, `token.created`, `user.role_changed`, `user.password_change_required`, `user.deleted`. Log lifecycle is audited too: `audit.viewed`, `audit.exported`, `access_log.viewed`, and `logs.pruned`. The admin audit view and login history both read from this single stream.
+
+### Access Log
+
+Every request (HTML and API) appends one row to `access_logs`: timestamp, acting identity (web session *or* API token — whichever authorized the request), method, sanitized path, Flask endpoint, status code, duration in ms, IP, and user agent. Retention is enforced with `flask prune-logs` once `BLOGG_ACCESS_LOG_RETENTION_DAYS`/`BLOGG_AUDIT_RETENTION_DAYS` are set to a positive number of days.
 
 ---
 
@@ -230,6 +242,7 @@ New tokens default to every scope **except** `tokens:manage` and `admin`. Legacy
 | `GET /admin/users`, `PATCH /admin/users/<id>`, `DELETE /admin/users/<id>` | Bearer + `admin` | User administration: role/active/confirmed/`must_change_password`, tombstone deletion |
 | `GET /admin/roles`, `POST /admin/roles`, ... | Bearer + `admin` | Role administration |
 | `GET /admin/audit` | Bearer + `admin` | Audit log query with filters |
+| `GET /admin/access-logs` | Bearer + `admin` | Access log query (`?q=`, `?method=`, `?status=2xx`, `?page=`) |
 
 Error responses are JSON (`{"message": "..."}`) with conventional status codes: `400` validation/guard violation, `401` missing or invalid credentials, `403` insufficient permission or scope, `404` not found, `429` rate limited.
 
@@ -251,6 +264,9 @@ uv run flask lint
 
 # Auto-format and fix lint issues
 uv run flask lint-fix
+
+# Delete audit/access records past their configured retention (0 = keep forever)
+uv run flask prune-logs
 ```
 
 ---
@@ -262,11 +278,12 @@ Blogg/
 ├── app/                       # Core application factory & blueprints
 │   ├── api/                   # Headless REST API v1 (auth, posts, tokens, admin)
 │   ├── auth/                  # Authentication blueprint (login, MFA, security center)
-│   ├── admin/                 # Admin console blueprint (users, roles, audit)
+│   ├── admin/                 # Admin console blueprint (users, roles, audit, access logs)
 │   ├── main/                  # Core blog features (posts, comments, profiles, search)
-│   ├── models.py              # Models (User, Role, Post, ..., AuditEvent, UserSession, ApiToken)
-│   ├── security.py            # IAM services (audit, auth policy, sessions, tokens)
+│   ├── models.py              # Models (User, Role, Post, ..., AuditEvent, AccessLog, UserSession, ApiToken)
+│   ├── security.py            # IAM services (audit/access logs, auth policy, sessions, tokens)
 │   ├── decorators.py          # RBAC decorators (permission_required, admin_required, ...)
+│   ├── cli.py                 # Factory-registered CLI commands (prune-logs)
 │   ├── email.py               # Async email utility
 │   ├── fake.py                # Fake data generator
 │   ├── static/                # CSS, fonts, and client-side assets

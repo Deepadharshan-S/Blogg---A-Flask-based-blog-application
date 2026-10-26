@@ -21,7 +21,7 @@ from ..security import (
     AUTH_MFA_REQUIRED,
     AUTH_OK,
     Event,
-    administrator_count,
+    active_administrator_count,
     authenticate_credentials,
     end_user_session,
     mfa_qr_data_uri,
@@ -83,10 +83,10 @@ def login():
             start_user_session(user, remember=form.remember_me.data)
             current_app.logger.info(f"User logged in: {user.email}")
             if user.must_change_password:
-                flash("You must change your password before continuing.")
+                flash("You must change your password before continuing.", "warning")
                 return redirect(url_for("auth.change_password"))
             if password_expired(user):
-                flash("Your password has expired. Please choose a new one.")
+                flash("Your password has expired. Please choose a new one.", "warning")
                 return redirect(url_for("auth.change_password"))
             return redirect(_post_login_redirect())
 
@@ -97,17 +97,18 @@ def login():
             session["mfa_next"] = request.args.get("next")
             return redirect(url_for("auth.mfa"))
         if status == AUTH_DISABLED:
-            flash("Your account has been disabled. Contact an administrator.")
+            flash("Your account has been disabled. Contact an administrator.", "error")
         elif status == AUTH_LOCKED:
             minutes = current_app.config["BLOGG_LOCKOUT_MINUTES"]
             flash(
                 "Your account is temporarily locked due to repeated failed login attempts. "
-                f"Please try again in {minutes} minutes or contact an administrator."
+                f"Please try again in {minutes} minutes or contact an administrator.",
+                "error",
             )
         elif status == AUTH_MFA_FAILED:
-            flash("Invalid authentication code.")
+            flash("Invalid authentication code.", "error")
         else:
-            flash("Invalid username or password.")
+            flash("Invalid username or password.", "error")
     return render_template("auth/login.html", form=form)
 
 
@@ -133,12 +134,12 @@ def mfa():
             record_audit(Event.MFA_SUCCESS, actor=user, commit=False)
             db.session.commit()
             current_app.logger.info(f"User {user.email} passed two-factor authentication")
-            flash("Two-factor authentication verified.")
+            flash("Two-factor authentication verified.", "success")
             if user.must_change_password:
-                flash("You must change your password before continuing.")
+                flash("You must change your password before continuing.", "warning")
                 return redirect(url_for("auth.change_password"))
             if password_expired(user):
-                flash("Your password has expired. Please choose a new one.")
+                flash("Your password has expired. Please choose a new one.", "warning")
                 return redirect(url_for("auth.change_password"))
             if is_safe_url(next_url):
                 return redirect(next_url)
@@ -156,9 +157,12 @@ def mfa():
             session.pop("mfa_user_id", None)
             session.pop("mfa_remember", None)
             minutes = current_app.config["BLOGG_LOCKOUT_MINUTES"]
-            flash(f"Too many failed attempts. Your account is locked for {minutes} minutes.")
+            flash(
+                f"Too many failed attempts. Your account is locked for {minutes} minutes.",
+                "error",
+            )
             return redirect(url_for("auth.login"))
-        flash("Invalid authentication code.")
+        flash("Invalid authentication code.", "error")
     return render_template("auth/mfa.html", form=form)
 
 
@@ -175,9 +179,9 @@ def confirm(token):
             commit=False,
         )
         db.session.commit()
-        flash("You have confirmed your account. Thanks!")
+        flash("You have confirmed your account. Thanks!", "success")
     else:
-        flash("The confirmation link is invalid or has expired.")
+        flash("The confirmation link is invalid or has expired.", "error")
     return redirect(url_for("main.index"))
 
 
@@ -195,7 +199,7 @@ def before_request():
         candidate = db.session.get(User, user_pk) if user_pk is not None else None
         if candidate is not None and not candidate.active:
             end_user_session()
-            flash("Your account has been disabled. Contact an administrator.")
+            flash("Your account has been disabled. Contact an administrator.", "error")
             if request.blueprint != "api":
                 return redirect(url_for("auth.login"))
         elif candidate is not None:
@@ -205,7 +209,7 @@ def before_request():
             # page like any other revocation, instead of silently rendering
             # every public page as anonymous while the stale cookie lingers.
             end_user_session()
-            flash("Your session has expired. Please log in again.")
+            flash("Your session has expired. Please log in again.", "warning")
             if request.blueprint != "api":
                 return redirect(url_for("auth.login"))
         return
@@ -213,7 +217,7 @@ def before_request():
     # Disabled accounts lose their sessions immediately.
     if not user.active:
         end_user_session()
-        flash("Your account has been disabled. Contact an administrator.")
+        flash("Your account has been disabled. Contact an administrator.", "error")
         return redirect(url_for("auth.login")) if request.blueprint != "api" else None
 
     # Server-side session validation (revocation + idle/absolute timeouts).
@@ -221,7 +225,7 @@ def before_request():
         end_user_session()
         if request.blueprint == "api":
             return None
-        flash("Your session has expired. Please log in again.")
+        flash("Your session has expired. Please log in again.", "warning")
         return redirect(url_for("auth.login"))
 
     # B1/B2: a forced password change (B1) or an expired password (B2, when
@@ -234,14 +238,25 @@ def before_request():
         and (user.must_change_password or password_expired(user))
     ):
         flash(
-            "You must change your password before continuing."
-            if user.must_change_password
-            else "Your password has expired. Please choose a new one."
+            (
+                "You must change your password before continuing."
+                if user.must_change_password
+                else "Your password has expired. Please choose a new one."
+            ),
+            "warning",
         )
         return redirect(url_for("auth.change_password"))
 
     user.ping()
-    if not user.confirmed and request.blueprint != "auth" and request.endpoint != "static":
+    # Only gate real routes: on routing exceptions (404/405) url_rule is None
+    # and request.blueprint is None too, which would wrongly bounce the user
+    # to the unconfirmed page instead of the error page.
+    if (
+        request.url_rule is not None
+        and not user.confirmed
+        and request.blueprint != "auth"
+        and request.endpoint != "static"
+    ):
         return redirect(url_for("auth.unconfirmed"))
 
 
@@ -265,7 +280,7 @@ def logout():
         target_label=jti,
         commit=True,
     )
-    flash("You have been logged out.")
+    flash("You have been logged out.", "info")
     return redirect(url_for("main.index"))
 
 
@@ -286,15 +301,19 @@ def register():
         record_audit(Event.REGISTER, actor=user, commit=False)
         db.session.commit()
 
-        flash("You can now login.")
+        flash(
+            "Your account has been created. Check your inbox for a confirmation link, then log in.",
+            "success",
+        )
         return redirect(url_for("auth.login"))
     return render_template("auth/register.html", form=form)
 
 
-@auth.route("/confirm")
+@auth.route("/confirm", methods=["POST"])
 @login_required
 @limiter.limit("5 per hour")
 def resend_confirmation():
+    # POST-only: sending email on a GET made this forgeable cross-site.
     token = current_user.generate_confirmation_token()
     send_email(
         current_user.email,
@@ -303,7 +322,7 @@ def resend_confirmation():
         user=current_user,
         token=token,
     )
-    flash("A new confirmation email has been sent to you by email.")
+    flash("A new confirmation email has been sent to you by email.", "success")
     return redirect(url_for("main.index"))
 
 
@@ -314,8 +333,9 @@ def change_password():
     if form.validate_on_submit():
         if current_user.verify_password(form.old_password.data):
             if current_user.is_password_reused(form.password.data):
-                flash("You cannot reuse a recent password.")
-                return render_template("auth/change_password.html", form=form)
+                flash("You cannot reuse a recent password.", "error")
+                # Redirect (PRG) so refreshing cannot re-POST the form.
+                return redirect(url_for("auth.change_password"))
             # Archive the outgoing hash first so it (and recent predecessors)
             # can never be reused, then set the new password.
             current_user.push_password_history()
@@ -342,11 +362,12 @@ def change_password():
             db.session.commit()
             flash(
                 "Your password has been updated."
-                + (f" Other sessions were signed out ({revoked})." if revoked else "")
+                + (f" Other sessions were signed out ({revoked})." if revoked else ""),
+                "success",
             )
             return redirect(url_for("main.index"))
         else:
-            flash("Invalid password.")
+            flash("Invalid password.", "error")
     return render_template("auth/change_password.html", form=form)
 
 
@@ -355,13 +376,13 @@ def change_password():
 def delete_account():
     """Self-service account deletion (B3): tombstone, never hard-delete."""
     user = current_user._get_current_object()
-    if user.can(Permission.ADMIN) and administrator_count() <= 1:
-        flash("You cannot delete the last administrator account.")
+    if user.can(Permission.ADMIN) and active_administrator_count(exclude_user_id=user.id) == 0:
+        flash("You cannot delete the last administrator account.", "error")
         return redirect(url_for("auth.security"))
     # Confirm with the current password (CSRF is enforced globally).
     password = request.form.get("password", "")
     if not password or not user.verify_password(password):
-        flash("Invalid password.")
+        flash("Invalid password.", "error")
         return redirect(url_for("auth.security"))
     # Tombstone first (posts and comments stay, the person does not), then
     # kill every credential that could still act as this user.
@@ -379,7 +400,10 @@ def delete_account():
     db.session.commit()
     end_user_session()
     current_app.logger.info(f"Account deleted (self-service): user id {user.id}")
-    flash("Your account has been deleted. Your posts remain on the site anonymously.")
+    flash(
+        "Your account has been deleted. Your posts remain on the site anonymously.",
+        "success",
+    )
     return redirect(url_for("main.index"))
 
 
@@ -414,7 +438,10 @@ def password_reset_request():
                 success=False,
                 detail={"reason": "unknown_email"},
             )
-        flash("An email with instructions to reset your password has been sent to you.")
+        flash(
+            "An email with instructions to reset your password has been sent to you.",
+            "success",
+        )
         return redirect(url_for("auth.login"))
     return render_template("auth/reset_password.html", form=form)
 
@@ -437,9 +464,9 @@ def password_reset(token):
                 detail={"method": "email_reset_link"},
             )
             db.session.commit()
-            flash("Your password has been updated.")
+            flash("Your password has been updated.", "success")
             return redirect(url_for("auth.login"))
-        flash("The password reset link is invalid or has expired.")
+        flash("The password reset link is invalid or has expired.", "error")
         return redirect(url_for("auth.login"))
     return render_template("auth/reset_password.html", form=form)
 
@@ -460,11 +487,15 @@ def change_email_request():
                 token=token,
             )
             flash(
-                "An email with instructions to confirm your new email address has been sent to you."
+                "An email with instructions to confirm your new email address has been sent to you.",
+                "success",
             )
             return redirect(url_for("main.index"))
         else:
-            flash("Invalid email or password.")
+            # The form validates the email field itself; the only remaining
+            # failure mode here is a wrong password.
+            flash("Invalid password.", "error")
+            return redirect(url_for("auth.change_email_request"))
     return render_template("auth/change_email.html", form=form)
 
 
@@ -479,9 +510,9 @@ def change_email(token):
             commit=False,
         )
         db.session.commit()
-        flash("Your email address has been updated.")
+        flash("Your email address has been updated.", "success")
     else:
-        flash("Invalid request.")
+        flash("Invalid request.", "error")
     return redirect(url_for("main.index"))
 
 
@@ -513,7 +544,7 @@ def security():
 @login_required
 def mfa_setup():
     if current_user.mfa_enabled:
-        flash("Two-factor authentication is already enabled.")
+        flash("Two-factor authentication is already enabled.", "info")
         return redirect(url_for("auth.security"))
 
     form = MFAVerificationForm()
@@ -534,7 +565,7 @@ def mfa_setup():
             )
             db.session.commit()
             session["mfa_backup_codes"] = codes
-            flash("Two-factor authentication is now enabled.")
+            flash("Two-factor authentication is now enabled.", "success")
             return redirect(url_for("auth.security"))
         record_audit(
             Event.MFA_FAILED,
@@ -542,7 +573,7 @@ def mfa_setup():
             success=False,
             detail={"stage": "enrollment"},
         )
-        flash("That code did not verify. Try again with a fresh code.")
+        flash("That code did not verify. Try again with a fresh code.", "error")
     return render_template(
         "auth/mfa_setup.html",
         form=form,
@@ -555,18 +586,25 @@ def mfa_setup():
 @login_required
 def mfa_disable():
     form = DisableMFAForm()
-    if form.validate_on_submit() and current_user.verify_password(form.password.data):
-        current_user.disable_mfa()
-        db.session.add(current_user._get_current_object())
-        record_audit(
-            Event.MFA_DISABLED,
-            actor=current_user._get_current_object(),
-            commit=False,
-        )
-        db.session.commit()
-        flash("Two-factor authentication has been disabled.")
-    else:
-        flash("Invalid password.")
+    if not form.validate_on_submit():
+        flash("Invalid request.", "error")
+        return redirect(url_for("auth.security"))
+    if not current_user.mfa_enabled:
+        # Do not claim success (or demand a password) for a no-op.
+        flash("Two-factor authentication is not enabled.", "info")
+        return redirect(url_for("auth.security"))
+    if not current_user.verify_password(form.password.data):
+        flash("Invalid password.", "error")
+        return redirect(url_for("auth.security"))
+    current_user.disable_mfa()
+    db.session.add(current_user._get_current_object())
+    record_audit(
+        Event.MFA_DISABLED,
+        actor=current_user._get_current_object(),
+        commit=False,
+    )
+    db.session.commit()
+    flash("Two-factor authentication has been disabled.", "success")
     return redirect(url_for("auth.security"))
 
 
@@ -575,7 +613,7 @@ def mfa_disable():
 def session_revoke(jti):
     row = db.session.get(UserSession, jti)
     if row is None or row.user_id != current_user.id:
-        flash("Session not found.")
+        flash("Session not found.", "error")
         return redirect(url_for("auth.security"))
     is_current = jti == session.get("session_jti")
     if row.revoked_at is None:
@@ -586,9 +624,9 @@ def session_revoke(jti):
     if is_current:
         session.pop("session_jti", None)
         end_user_session()
-        flash("You have been signed out of this device.")
+        flash("You have been signed out of this device.", "success")
         return redirect(url_for("auth.login"))
-    flash("That session has been revoked.")
+    flash("That session has been revoked.", "success")
     return redirect(url_for("auth.security"))
 
 
@@ -601,7 +639,10 @@ def session_revoke_others():
     # Same identity re-stamp as change_password: the cutoff kills every
     # pre-revocation identity, so refresh this device's tag to keep it in.
     session["_user_id"] = current_user.get_id()
-    flash(f"Signed out of {revoked} other session(s)." if revoked else "No other sessions found.")
+    flash(
+        f"Signed out of {revoked} other session(s)." if revoked else "No other sessions found.",
+        "success" if revoked else "info",
+    )
     return redirect(url_for("auth.security"))
 
 
@@ -620,5 +661,5 @@ def session_revoke_all():
         detail={"scope": "all", "revoked": revoked},
         commit=True,
     )
-    flash("Signed out of all devices." if revoked else "Signed out everywhere.")
+    flash("Signed out of all devices." if revoked else "Signed out everywhere.", "success")
     return redirect(url_for("auth.login"))
