@@ -1142,3 +1142,201 @@ h1, h2, h3, h4, h5, h6 {
   text-decoration: underline;
 }
 
+/* ==========================================================================
+   Dynamic Password Requirements Checklist & Strength Indicator
+   ========================================================================== */
+
+.password-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.password-input-wrapper .form-control {
+  padding-right: 42px;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  z-index: 2;
+}
+
+.password-toggle-btn:hover {
+  color: var(--text-main);
+  background-color: rgba(148, 163, 184, 0.1);
+}
+
+.password-toggle-btn:focus {
+  outline: none;
+  color: var(--primary);
+}
+
+.password-requirements-card {
+  margin-top: -6px;
+  margin-bottom: 18px;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 13px;
+  animation: fadeInDown 0.2s ease-out;
+  transition: all 0.2s ease;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.password-strength-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.password-strength-title {
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 11px;
+}
+
+.password-strength-badge {
+  font-weight: 700;
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background-color: rgba(148, 163, 184, 0.1);
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.password-strength-meter {
+  display: flex;
+  gap: 4px;
+  height: 5px;
+  margin-bottom: 12px;
+}
+
+.password-strength-bar {
+  flex: 1;
+  height: 100%;
+  background-color: var(--border-color);
+  border-radius: 3px;
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.password-strength-bar.active-weak {
+  background-color: #ef4444;
+}
+
+.password-strength-bar.active-fair {
+  background-color: #f97316;
+}
+
+.password-strength-bar.active-good {
+  background-color: #eab308;
+}
+
+.password-strength-bar.active-strong {
+  background-color: #3b82f6;
+}
+
+.password-strength-bar.active-very-strong {
+  background-color: #22c55e;
+}
+
+.requirements-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.req-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 0.2s ease, transform 0.15s ease;
+}
+
+.req-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  background-color: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.req-item.met {
+  color: var(--text-main);
+}
+
+.req-item.met .req-icon {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  transform: scale(1.05);
+}
+
+.req-item.unmet.touched {
+  color: var(--text-muted);
+}
+
+.req-item.unmet.touched .req-icon {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+/* Match hint below confirm password */
+.password-match-hint {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  animation: fadeInDown 0.15s ease-out;
+}
+
+.password-match-hint.matched {
+  display: flex;
+  color: #22c55e;
+}
+
+.password-match-hint.mismatched {
+  display: flex;
+  color: #ef4444;
+}
+
