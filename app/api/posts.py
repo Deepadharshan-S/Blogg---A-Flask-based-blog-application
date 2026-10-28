@@ -2,9 +2,10 @@ from flask import current_app, g, jsonify, request, url_for
 from sqlalchemy.orm import joinedload
 
 from .. import db
+from ..decorators import owner_or_permission
 from ..models import Comment, Permission, Post
 from . import api
-from .authentication import permission_required_api, token_auth_required
+from .authentication import permission_required_api, scope_required, token_auth_required
 from .errors import bad_request, forbidden, not_found
 
 
@@ -57,6 +58,7 @@ def get_post(id):
 @api.route("/posts", methods=["POST"])
 @token_auth_required
 @permission_required_api(Permission.WRITE)
+@scope_required("posts:write")
 def new_post():
     data = request.get_json() or {}
     body = data.get("body", "").strip()
@@ -74,12 +76,13 @@ def new_post():
 
 @api.route("/posts/<int:id>", methods=["PUT"])
 @token_auth_required
+@scope_required("posts:write")
 def edit_post(id):
     post = db.session.get(Post, id)
     if post is None:
         return not_found(f"Post with id {id} not found")
 
-    if g.current_user != post.author and not g.current_user.can(Permission.ADMIN):
+    if not owner_or_permission(g.current_user, post):
         return forbidden("You can only edit your own posts.")
 
     data = request.get_json() or {}
@@ -95,6 +98,7 @@ def edit_post(id):
 
 @api.route("/posts/<int:id>/like", methods=["POST"])
 @token_auth_required
+@scope_required("posts:write")
 def api_like_post(id):
     post = db.session.get(Post, id)
     if post is None:

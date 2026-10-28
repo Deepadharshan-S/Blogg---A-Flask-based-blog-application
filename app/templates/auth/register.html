@@ -13,7 +13,7 @@
     </div>
 
     <div class="auth-body">
-      {{ wtf.quick_form(form, button_map={"submit": "btn btn-primary btn-block"}) }}
+      {{ wtf.quick_form(form, button_map={"submit": "primary btn-block"}) }}
     </div>
 
     <div class="auth-footer text-center">
@@ -27,4 +27,9 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="{{ url_for('static', filename='js/password-validator.js') }}"></script>
 {% endblock %}

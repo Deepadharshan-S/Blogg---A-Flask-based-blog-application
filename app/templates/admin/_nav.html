@@ -1,0 +1,19 @@
+<ul class="nav nav-tabs" style="margin-bottom: 15px;">
+  <li {% if active == 'dashboard' %}class="active"{% endif %}>
+    <a href="{{ url_for('admin.dashboard') }}">Dashboard</a>
+  </li>
+  <li {% if active == 'users' %}class="active"{% endif %}>
+    <a href="{{ url_for('admin.users') }}">Users</a>
+  </li>
+  <li {% if active == 'roles' %}class="active"{% endif %}>
+    <a href="{{ url_for('admin.roles') }}">Roles</a>
+  </li>
+  {% if current_user.can(Permission.VIEW_AUDIT) %}
+  <li {% if active == 'audit' %}class="active"{% endif %}>
+    <a href="{{ url_for('admin.audit_log') }}">Audit Log</a>
+  </li>
+  <li {% if active == 'access' %}class="active"{% endif %}>
+    <a href="{{ url_for('admin.access_log') }}">Access Log</a>
+  </li>
+  {% endif %}
+</ul>

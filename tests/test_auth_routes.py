@@ -2,6 +2,8 @@ import re
 import unittest
 from unittest.mock import patch
 
+from flask import g
+
 from app import create_app, db, limiter
 from app.auth.views import is_safe_url
 from app.models import Role, User
@@ -12,6 +14,19 @@ class AuthRoutesTestCase(unittest.TestCase):
         self.app = create_app("testing")
         self.app_context = self.app.app_context()
         self.app_context.push()
+
+        # The app context pushed above is reused by every request Flask
+        # serves, so `g` (flask-wtf caches the CSRF token there, flask-login
+        # the current user) would leak between requests. Clear it after each
+        # request to restore production-like per-request isolation — the
+        # same fix as tests/iam_base.py. Without it a stale g.csrf_token
+        # short-circuits generate_csrf() after logout, the session never
+        # gets a fresh csrf_token and the emptied session deletes its cookie.
+        @self.app.teardown_request
+        def _isolate_g(err=None):  # noqa: ARG001
+            g.pop("csrf_token", None)
+            g.pop("_login_user", None)
+
         db.create_all()
         Role.insert_roles()
         limiter.reset()
@@ -23,7 +38,9 @@ class AuthRoutesTestCase(unittest.TestCase):
         self.app_context.pop()
 
     def _get_csrf_token(self):
-        response = self.client.get("/")
+        # follow_redirects: unconfirmed users are bounced from "/" to
+        # /auth/unconfirmed, which still carries the csrf meta tag.
+        response = self.client.get("/", follow_redirects=True)
         match = re.search(
             r'<meta name="csrf-token" content="([^"]+)">', response.get_data(as_text=True)
         )
@@ -148,10 +165,17 @@ class AuthRoutesTestCase(unittest.TestCase):
         self.assertEqual(res_success.status_code, 200)
         self.assertIn("loginuser", res_success.get_data(as_text=True))
 
-        # Logout
-        res_logout = self.client.get("/auth/logout", follow_redirects=True)
+        # Logout (POST-only; a GET would be forged cross-site)
+        token = self._get_csrf_token()
+        res_logout = self.client.post(
+            "/auth/logout",
+            headers={"X-CSRFToken": token},
+            data={"csrf_token": token},
+            follow_redirects=True,
+        )
         self.assertEqual(res_logout.status_code, 200)
         self.assertIn("You have been logged out.", res_logout.get_data(as_text=True))
+        self.assertEqual(self.client.get("/auth/logout").status_code, 405)
 
     def test_login_redirect_validation(self):
         """Ensure login next parameter permits safe local paths and rejects external/malformed URLs."""
@@ -305,7 +329,17 @@ class AuthRoutesTestCase(unittest.TestCase):
 
         self._login("resend@example.com", "Password123!")
 
-        res = self.client.get("/auth/confirm", follow_redirects=True)
+        # POST-only: a GET must no longer trigger the email.
+        res_get = self.client.get("/auth/confirm")
+        self.assertEqual(res_get.status_code, 405)
+        mock_send_email.assert_not_called()
+
+        token = self._get_csrf_token()
+        res = self.client.post(
+            "/auth/confirm",
+            headers={"X-CSRFToken": token},
+            follow_redirects=True,
+        )
         self.assertEqual(res.status_code, 200)
         self.assertIn("A new confirmation email has been sent", res.get_data(as_text=True))
         mock_send_email.assert_called_once()
@@ -677,7 +711,16 @@ class AuthRoutesTestCase(unittest.TestCase):
         self.assertEqual(res_login.headers.get("Location"), "/")
 
         # 4. Password reset request with mixed-case email finds the account (as anonymous user)
-        self.client.get("/auth/logout")
+        # Logout is POST-only; reuse the pre-login CSRF token because an
+        # unconfirmed signed-in user is bounced off "/" (auth.before_request),
+        # so fetching a fresh token there would fail. The session's csrf_token
+        # survives login.
+        res_logout = self.client.post(
+            "/auth/logout",
+            headers={"X-CSRFToken": token},
+            data={"csrf_token": token},
+        )
+        self.assertEqual(res_logout.status_code, 302)
         token = self._get_csrf_token()
         res_reset = self.client.post(
             "/auth/reset",
@@ -687,3 +730,26 @@ class AuthRoutesTestCase(unittest.TestCase):
         )
         self.assertEqual(res_reset.status_code, 302)
         self.assertEqual(res_reset.headers.get("Location"), "/auth/login")
+
+    def test_static_assets_accessible_for_unconfirmed_and_must_change_password(self):
+        """Ensure static assets (including bootstrap.static) are never redirected for unconfirmed users."""
+        user = User(
+            email="unconf_assets@example.com",
+            username="unconfassets",
+            password="Password123!",
+            confirmed=False,
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        self._login("unconf_assets@example.com", "Password123!")
+
+        # Unconfirmed user accessing static assets receives 200 OK without redirect
+        res_css = self.client.get("/static/css/style.css")
+        self.assertEqual(res_css.status_code, 200)
+
+        res_bootstrap = self.client.get("/static/bootstrap/css/bootstrap.min.css")
+        self.assertEqual(res_bootstrap.status_code, 200)
+
+        res_js = self.client.get("/static/js/password-validator.js")
+        self.assertEqual(res_js.status_code, 200)

@@ -1,9 +1,10 @@
 import logging
 import os
 import sqlite3
+import time
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, request
+from flask import Flask, g, request
 from flask_bootstrap import Bootstrap
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -66,10 +67,19 @@ def create_app(config_name):
 
     app.register_blueprint(auth_blueprint, url_prefix="/auth")
 
+    from .admin import admin as admin_blueprint
+
+    app.register_blueprint(admin_blueprint)
+
     from .api import api as api_blueprint
 
     csrf.exempt(api_blueprint)
     app.register_blueprint(api_blueprint, url_prefix="/api/v1")
+
+    # App-scoped CLI commands (audit/access log retention, ...)
+    from .cli import register_cli_commands
+
+    register_cli_commands(app)
 
     # Configure ProxyFix only if BLOGG_NUM_PROXIES is explicitly configured to > 0
     try:
@@ -111,21 +121,49 @@ def create_app(config_name):
             "base-uri 'self'",
         ]
         response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
-
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=(), payment=()"
+        )
         # Strict-Transport-Security only in production deployments over HTTPS
         if not app.debug and not app.testing and request.is_secure:
             response.headers["Strict-Transport-Security"] = "max-age=31536000"
-
+        # Never cache pages or API payloads: after logout the back button
+        # must re-fetch (and get an anonymous response), not replay a cached
+        # authenticated view. Static assets keep their normal caching.
+        content_type = response.content_type or ""
+        if content_type.startswith("text/html") or content_type.startswith("application/json"):
+            response.headers["Cache-Control"] = "no-store, private"
+            response.headers["Pragma"] = "no-cache"
         return response
 
-    if not os.path.exists("logs"):
-        os.mkdir("logs")
-    file_handler = RotatingFileHandler("logs/blogg.log", maxBytes=10 * 1024 * 1024, backupCount=10)
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] in %(module)s: %(message)s")
-    )
-    file_handler.setLevel(logging.INFO)
-    app.logger.addHandler(file_handler)
+    # IAM: structured access log - one row per request (identity, path, status,
+    # source IP, duration). Static assets and disabled deployments are filtered
+    # inside record_access(); failures there never break the response.
+    from .security import record_access
+
+    @app.before_request
+    def _access_log_start():
+        g.pop("access_log_started", None)
+        g.access_log_started = time.monotonic()
+
+    @app.after_request
+    def _access_log_record(response):
+        started = g.pop("access_log_started", None)
+        duration_ms = int((time.monotonic() - started) * 1000) if started is not None else None
+        record_access(response, duration_ms=duration_ms)
+        return response
+
+    if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
+        if not os.path.exists("logs"):
+            os.mkdir("logs")
+        file_handler = RotatingFileHandler(
+            "logs/blogg.log", maxBytes=10 * 1024 * 1024, backupCount=10
+        )
+        file_handler.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] in %(module)s: %(message)s")
+        )
+        file_handler.setLevel(logging.INFO)
+        app.logger.addHandler(file_handler)
 
     app.logger.setLevel(logging.INFO)
     app.logger.info("Blogg startup")

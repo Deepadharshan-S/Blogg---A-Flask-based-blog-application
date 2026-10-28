@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}Blogg - Account Security{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+  <h1>Account Security</h1>
+</div>
+
+{% if backup_codes %}
+<div class="alert alert-danger">
+  <strong>Save your backup codes now</strong> &mdash; they are shown only once and can be used
+  if you lose your authenticator device.
+  <ul style="margin-top: 8px; margin-bottom: 0; columns: 2;">
+    {% for code in backup_codes %}
+    <li><code>{{ code }}</code></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="panel panel-default">
+      <div class="panel-heading">Two-Factor Authentication</div>
+      <div class="panel-body">
+        {% if current_user.mfa_enabled %}
+        <p>
+          <span class="label label-success">Enabled</span>
+          Your account requires an authenticator code at login.
+        </p>
+        <div class="text-muted" style="margin-bottom: 10px;">
+          Password last changed:
+          {% if current_user.password_changed_at %}
+          {{ moment(current_user.password_changed_at).fromNow() }}
+          {% else %}unknown{% endif %}
+        </div>
+        {{ wtf.quick_form(mfa_form, button_map={"submit": "danger btn-sm"}) }}
+        {% else %}
+        <p>
+          <span class="label label-default">Disabled</span>
+          Add a second factor (authenticator app) to protect your account.
+        </p>
+        <a class="btn btn-primary" href="{{ url_for('auth.mfa_setup') }}">
+          Set up two-factor authentication
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="panel panel-default">
+      <div class="panel-heading">Credentials</div>
+      <div class="panel-body">
+        <p><a href="{{ url_for('auth.change_password') }}">Change password</a></p>
+        <p><a href="{{ url_for('auth.change_email_request') }}">Change email address</a></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        Active Sessions &amp; Devices
+        <form
+          class="pull-right"
+          style="display: inline;"
+          action="{{ url_for('auth.session_revoke_others') }}"
+          method="post"
+        >
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-xs btn-default" type="submit">Sign out other devices</button>
+        </form>
+        <form
+          class="pull-right"
+          style="display: inline; margin-right: 6px;"
+          action="{{ url_for('auth.session_revoke_all') }}"
+          method="post"
+          onsubmit="return confirm('Sign out of all devices, including this one?');"
+        >
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-xs btn-danger" type="submit">Sign out everywhere</button>
+        </form>
+      </div>
+      <div class="panel-body">
+        {% if sessions %}
+        <table class="table table-condensed" style="margin-bottom: 0;">
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>Last seen</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in sessions %}
+            <tr>
+              <td>
+                {% if s.jti == current_jti %}
+                <span class="label label-primary">This device</span>
+                {% endif %}
+                <div class="text-muted" style="font-size: 12px;">
+                  {{ s.user_agent or "Unknown client" }}
+                </div>
+                <div class="text-muted" style="font-size: 12px;">IP: {{ s.ip or "?" }}</div>
+              </td>
+              <td>{{ moment(s.last_seen_at).fromNow() }}</td>
+              <td>
+                <form
+                  action="{{ url_for('auth.session_revoke', jti=s.jti) }}"
+                  method="post"
+                  style="display: inline;"
+                >
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-xs btn-warning" type="submit">Revoke</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No active sessions.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-8 col-md-offset-2">
+    <div class="panel panel-danger">
+      <div class="panel-heading">Danger zone</div>
+      <div class="panel-body">
+        <p>
+          Deleting your account removes your name, email, password and
+          two-factor setup. Your posts and comments stay on the site under an
+          anonymous tombstone, and every session and API token is revoked
+          immediately. This cannot be undone.
+        </p>
+        <form
+          method="post"
+          action="{{ url_for('auth.delete_account') }}"
+          onsubmit="return confirm('Delete your account permanently?');"
+        >
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="form-group">
+            <input
+              type="password"
+              name="password"
+              class="form-control"
+              placeholder="Confirm with your password"
+              required
+            >
+          </div>
+          <button type="submit" class="btn btn-danger">Delete my account</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

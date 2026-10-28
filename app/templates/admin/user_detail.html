@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+
+{% block title %}Blogg - {{ user.username }}{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+  <h1>
+    <img src="{{ user.gravatar(size=48) }}" class="img-circle" alt="">
+    {{ user.username }}
+    {% if not user.active %}
+    <span class="label label-danger">Disabled</span>
+    {% elif is_locked %}
+    <span class="label label-warning">Locked</span>
+    {% endif %}
+  </h1>
+</div>
+
+{% set active = 'users' %}
+{% include 'admin/_nav.html' %}
+
+<div class="row">
+  <div class="col-md-5">
+    <div class="panel panel-default">
+      <div class="panel-heading">Account</div>
+      <div class="panel-body">
+        <p style="margin-bottom: 5px;"><strong>Email:</strong> {{ user.email }}</p>
+        {% if user.deleted_at %}
+        <p style="margin-bottom: 5px;">
+          <span class="label label-default"
+            >deleted {{ moment(user.deleted_at).fromNow() }}</span
+          >
+        </p>
+        {% endif %}
+        <p style="margin-bottom: 5px;">
+          <strong>Confirmed:</strong> {{ "yes" if user.confirmed else "no" }}
+        </p>
+        <p style="margin-bottom: 5px;">
+          <strong>MFA:</strong> {{ "enabled" if user.mfa_enabled else "disabled" }}
+        </p>
+        <p style="margin-bottom: 5px;">
+          <strong>Failed logins:</strong> {{ user.failed_login_attempts or 0 }}
+          {% if is_locked %}
+          &mdash; locked until {{ moment(user.locked_until).format('L LT') if user.locked_until else "?" }}
+          {% endif %}
+        </p>
+        <p style="margin-bottom: 5px;">
+          <strong>Password last changed:</strong>
+          {{ moment(user.password_changed_at).fromNow() if user.password_changed_at else "unknown" }}
+          {% if user.must_change_password %}
+          <span class="label label-warning">change required</span>
+          {% endif %}
+        </p>
+        <p style="margin-bottom: 0;">
+          <strong>Member since:</strong> {{ moment(user.member_since).format('L') if user.member_since else "-" }}
+        </p>
+      </div>
+    </div>
+
+    <div class="panel panel-default">
+      <div class="panel-heading">Actions</div>
+      <div class="panel-body">
+        <form class="form-inline" method="post" style="margin-bottom: 10px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="role">
+          <div class="form-group">
+            <label>Role</label>
+            <select name="role_id" class="form-control">
+              {% for r in roles %}
+              <option value="{{ r.id }}" {% if user.role and user.role.id == r.id %}selected{% endif %}>
+                {{ r.name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary">Change role</button>
+        </form>
+
+        <div class="btn-group-vertical" style="width: 100%;">
+          {% if user.active %}
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="toggle_active">
+            <button type="submit" class="btn btn-warning btn-block">Disable account</button>
+          </form>
+          {% else %}
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="toggle_active">
+            <button type="submit" class="btn btn-success btn-block">Enable account</button>
+          </form>
+          {% endif %}
+
+          {% if is_locked %}
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="unlock">
+            <button type="submit" class="btn btn-warning btn-block">Unlock account</button>
+          </form>
+          {% endif %}
+
+          {% if not user.confirmed %}
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="confirm">
+            <button type="submit" class="btn btn-info btn-block">Mark confirmed</button>
+          </form>
+          {% endif %}
+
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="revoke_sessions">
+            <button type="submit" class="btn btn-warning btn-block">Revoke all sessions</button>
+          </form>
+
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="force_password_change">
+            <button type="submit" class="btn btn-warning btn-block">
+              {% if user.must_change_password %}
+              Clear forced password change
+              {% else %}
+              Require password change
+              {% endif %}
+            </button>
+          </form>
+
+          <form
+            method="post"
+            onsubmit="return confirm('Delete this account? Their posts remain as an anonymous tombstone.');"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="delete_user">
+            <button type="submit" class="btn btn-danger btn-block">
+              Delete account (keep posts)
+            </button>
+          </form>
+
+          {% if user.mfa_enabled %}
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="reset_mfa">
+            <button type="submit" class="btn btn-warning btn-block">Reset two-factor auth</button>
+          </form>
+          {% endif %}
+
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="send_reset">
+            <button type="submit" class="btn btn-default btn-block">Email password reset link</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-7">
+    <div class="panel panel-default">
+      <div class="panel-heading">Active sessions</div>
+      <table class="table table-condensed" style="margin-bottom: 0;">
+        <thead>
+          <tr><th>Device</th><th>Last seen</th></tr>
+        </thead>
+        <tbody>
+          {% for s in sessions %}
+          <tr>
+            <td>
+              <div class="text-muted" style="font-size: 12px;">{{ s.user_agent or "Unknown client" }}</div>
+              <div class="text-muted" style="font-size: 12px;">IP: {{ s.ip or "?" }}</div>
+            </td>
+            <td>{{ moment(s.last_seen_at).fromNow() }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="2" class="text-muted">No active sessions.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel panel-default">
+      <div class="panel-heading">Security history</div>
+      <table class="table table-condensed" style="margin-bottom: 0;">
+        <thead>
+          <tr><th>When</th><th>Event</th><th>Result</th><th>IP</th></tr>
+        </thead>
+        <tbody>
+          {% for e in events %}
+          <tr>
+            <td>{{ moment(e.timestamp).fromNow() }}</td>
+            <td><code>{{ e.event }}</code></td>
+            <td>
+              {% if e.success %}
+              <span class="label label-success">OK</span>
+              {% else %}
+              <span class="label label-danger">FAIL</span>
+              {% endif %}
+            </td>
+            <td>{{ e.ip or "-" }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-muted">No events recorded.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

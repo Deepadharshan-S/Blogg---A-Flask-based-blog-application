@@ -17,7 +17,7 @@
 <div class="post-tabs">
     <ul class="nav nav-tabs">
         <li{% if not show_followed %} class="active"{% endif %}>
-            <a href="{{ url_for('.show_all') }}">All</a>
+            <a href="{{ url_for('.show_all') if current_user.is_authenticated else url_for('.index') }}">All</a>
         </li>
         {% if current_user.is_authenticated %}
         <li{% if show_followed %} class="active"{% endif %}>
@@ -28,7 +28,7 @@
     {% include '_posts.html' %}
 </div>
 
-{% if pagination %}
+{% if pagination and pagination.pages > 1 %}
 <div class="pagination">
     {{ macros.pagination_widget(pagination, '.index') }}
 </div>

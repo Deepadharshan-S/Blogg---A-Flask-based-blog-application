@@ -1,4 +1,5 @@
 import os
+import secrets
 
 from dotenv import load_dotenv
 
@@ -7,7 +8,10 @@ load_dotenv(os.path.join(basedir, ".env"))
 
 
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY") or "01a17e0f0083fb73295dcf3d6455dbdc"
+    # NOTE: no hardcoded fallback. Production fails fast without SECRET_KEY;
+    # development generates an ephemeral key (sessions reset on restart);
+    # testing uses a fixed key so signed tokens remain stable per test run.
+    SECRET_KEY = os.environ.get("SECRET_KEY")
     MAIL_SERVER = os.environ.get("MAIL_SERVER", "smtp.googlemail.com")
     MAIL_PORT = int(os.environ.get("MAIL_PORT", "587"))
     MAIL_USE_TLS = os.environ.get("MAIL_USE_TLS", "true").lower() in ["true", "on", "1"]
@@ -26,9 +30,70 @@ class Config:
     SQLALCHEMY_RECORD_QUERIES = True
     BOOTSTRAP_SERVE_LOCAL = True
 
-    @staticmethod
-    def init_app(app):
-        pass
+    # --- IAM settings ---
+    BLOGG_MAX_FAILED_LOGINS = int(os.environ.get("BLOGG_MAX_FAILED_LOGINS", "5"))
+    BLOGG_LOCKOUT_MINUTES = int(os.environ.get("BLOGG_LOCKOUT_MINUTES", "15"))
+    BLOGG_SESSION_IDLE_MINUTES = int(os.environ.get("BLOGG_SESSION_IDLE_MINUTES", "60"))
+    BLOGG_SESSION_ABSOLUTE_HOURS = int(os.environ.get("BLOGG_SESSION_ABSOLUTE_HOURS", "24"))
+    BLOGG_TOKEN_DEFAULT_TTL = int(os.environ.get("BLOGG_TOKEN_DEFAULT_TTL", "3600"))
+    BLOGG_TOKEN_MAX_TTL = int(os.environ.get("BLOGG_TOKEN_MAX_TTL", "2592000"))
+    BLOGG_PASSWORD_HISTORY_COUNT = int(os.environ.get("BLOGG_PASSWORD_HISTORY_COUNT", "5"))
+    # Maximum password age in days; 0 (default) disables expiry entirely.
+    # When enabled, an expired password forces a change at next login.
+    BLOGG_PASSWORD_MAX_AGE_DAYS = int(os.environ.get("BLOGG_PASSWORD_MAX_AGE_DAYS", "0"))
+    BLOGG_MFA_ISSUER = os.environ.get("BLOGG_MFA_ISSUER", "Blogg")
+    BLOGG_ENFORCE_MFA_FOR_ADMINS = os.environ.get(
+        "BLOGG_ENFORCE_MFA_FOR_ADMINS", "false"
+    ).lower() in ["true", "on", "1"]
+    # Rate limit applied to the login and MFA challenge endpoints (callable per-request).
+    BLOGG_LOGIN_RATE_LIMIT = os.environ.get("BLOGG_LOGIN_RATE_LIMIT", "5 per minute")
+    BLOGG_ADMIN_PER_PAGE = 20
+    BLOGG_AUDIT_PER_PAGE = 30
+    BLOGG_ACCESS_LOG_PER_PAGE = 30
+
+    # --- Audit & access log settings ---
+    # Structured per-request access trail (Admin console -> Access Log).
+    BLOGG_ACCESS_LOG_ENABLED = os.environ.get("BLOGG_ACCESS_LOG_ENABLED", "true").lower() in [
+        "true",
+        "on",
+        "1",
+    ]
+    # Comma-separated path prefixes that are never written to the access log.
+    BLOGG_ACCESS_LOG_EXCLUDE_PREFIXES = tuple(
+        p.strip()
+        for p in os.environ.get("BLOGG_ACCESS_LOG_EXCLUDE_PREFIXES", "/static").split(",")
+        if p.strip()
+    )
+    # Retention windows (days) enforced by `flask prune-logs`; 0 keeps records forever.
+    BLOGG_ACCESS_LOG_RETENTION_DAYS = int(os.environ.get("BLOGG_ACCESS_LOG_RETENTION_DAYS", "0"))
+    BLOGG_AUDIT_RETENTION_DAYS = int(os.environ.get("BLOGG_AUDIT_RETENTION_DAYS", "0"))
+
+    # Rate limiting: in-memory by default (tests/dev), persistent in production.
+    RATELIMIT_STORAGE_URI = "memory://"
+
+    # Cookie hardening: identity cookies are JS-invisible and never sent
+    # cross-site without a top-level navigation (mitigates CSRF + theft).
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+
+    @classmethod
+    def init_app(cls, app):
+        if not app.config.get("SECRET_KEY"):
+            if app.config.get("TESTING"):
+                app.config["SECRET_KEY"] = "blogg-testing-secret-key"
+            elif app.config.get("DEBUG"):
+                app.config["SECRET_KEY"] = secrets.token_hex(32)
+                app.logger.warning(
+                    "SECRET_KEY not set - generated an ephemeral development key. "
+                    "Sessions and tokens will not survive a restart."
+                )
+            else:
+                raise RuntimeError(
+                    "SECRET_KEY environment variable must be set in production. "
+                    'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
+                )
 
 
 class DevelopmentConfig(Config):
@@ -42,6 +107,9 @@ class DevelopmentConfig(Config):
 class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL") or "sqlite://"
+    RATELIMIT_STORAGE_URI = "memory://"
+    # Tests (e.g. lockout) intentionally exceed the production login limit.
+    BLOGG_LOGIN_RATE_LIMIT = "1000 per minute"
 
 
 class ProductionConfig(Config):
@@ -51,13 +119,22 @@ class ProductionConfig(Config):
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL") or "sqlite:///" + os.path.join(
         basedir, "data.sqlite"
     )
-
-    SESSION_COOKIE_SECURE = True
-    SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = "Lax"
-    REMEMBER_COOKIE_SECURE = True
-    REMEMBER_COOKIE_HTTPONLY = True
-    REMEMBER_COOKIE_SAMESITE = "Lax"
+    RATELIMIT_STORAGE_URI = os.environ.get(
+        "RATELIMIT_STORAGE_URI", "filesystem://" + os.path.join(basedir, "logs", "ratelimit")
+    )
+    # Secure cookies by default in production; set SESSION_COOKIE_SECURE=false
+    # (and/or REMEMBER_COOKIE_SECURE=false) when serving plain HTTP behind a
+    # trusted proxy during initial rollout.
+    SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() in [
+        "true",
+        "on",
+        "1",
+    ]
+    REMEMBER_COOKIE_SECURE = os.environ.get("REMEMBER_COOKIE_SECURE", "true").lower() in [
+        "true",
+        "on",
+        "1",
+    ]
 
     @classmethod
     def init_app(cls, app):

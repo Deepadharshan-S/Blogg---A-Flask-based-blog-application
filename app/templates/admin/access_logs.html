@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+
+{% block title %}Blogg - Access Log{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+  <h1>Access Log</h1>
+</div>
+
+{% set active = 'access' %}
+{% include 'admin/_nav.html' %}
+
+<form class="form-inline" method="get" action="{{ url_for('admin.access_log') }}" style="margin-bottom: 15px;">
+  <div class="form-group">
+    <input type="text" class="form-control" name="q" placeholder="Path, user or IP"
+           value="{{ filters.q }}">
+  </div>
+  <div class="form-group">
+    <select name="method" class="form-control">
+      <option value="">All methods</option>
+      {% for m in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] %}
+      <option value="{{ m }}" {% if filters.method == m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <select name="status" class="form-control">
+      <option value="">All statuses</option>
+      {% for s in ['1xx', '2xx', '3xx', '4xx', '5xx'] %}
+      <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-default">Filter</button>
+  <a class="btn btn-link" href="{{ url_for('admin.access_log') }}">Reset</a>
+</form>
+
+<div class="panel panel-default">
+  <table class="table table-condensed table-striped" style="margin-bottom: 0;">
+    <thead>
+      <tr>
+        <th>When</th>
+        <th>Method</th>
+        <th>Path</th>
+        <th>User</th>
+        <th>Status</th>
+        <th>ms</th>
+        <th>IP</th>
+        <th>Agent</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in logs %}
+      <tr>
+        <td>{{ moment(log.timestamp).fromNow() if log.timestamp else "-" }}</td>
+        <td><code>{{ log.method }}</code>{% if log.is_api %} <span class="label label-info">API</span>{% endif %}</td>
+        <td>
+          <code>{{ log.path }}</code>
+          {% if log.endpoint %}<br><span class="text-muted">{{ log.endpoint }}</span>{% endif %}
+        </td>
+        <td>{{ log.user_label or "-" }}</td>
+        <td>
+          {% if log.status_code >= 500 %}
+          <span class="label label-danger">{{ log.status_code }}</span>
+          {% elif log.status_code >= 400 %}
+          <span class="label label-warning">{{ log.status_code }}</span>
+          {% elif log.status_code >= 200 %}
+          <span class="label label-success">{{ log.status_code }}</span>
+          {% else %}
+          <span class="label label-default">{{ log.status_code }}</span>
+          {% endif %}
+        </td>
+        <td>{{ log.duration_ms if log.duration_ms is not none else "-" }}</td>
+        <td>{{ log.ip or "-" }}</td>
+        <td>
+          {% if log.user_agent %}
+          <details>
+            <summary style="cursor: pointer;">view</summary>
+            <div style="font-size: 11px; margin-top: 5px; word-break: break-all;">{{ log.user_agent }}</div>
+          </details>
+          {% else %}-{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="text-muted">No access records match this filter.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if pagination.pages > 1 %}
+<div class="pagination">
+  {{ macros.pagination_widget(pagination, 'admin.access_log', q=filters.q,
+      method=filters.method, status=filters.status) }}
+</div>
+{% endif %}
+{% endblock %}

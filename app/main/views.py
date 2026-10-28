@@ -14,8 +14,14 @@ from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
 from .. import db
-from ..decorators import admin_required, permission_required
+from ..decorators import admin_required, owner_or_permission, permission_required
 from ..models import Comment, Permission, Post, Role, User
+from ..security import (
+    Event,
+    active_administrator_count,
+    escape_like,
+    record_audit,
+)
 from . import main
 from .forms import CommentForm, EditProfileAdminForm, EditProfileForm, PostForm
 
@@ -41,7 +47,14 @@ def is_safe_redirect_url(target):
 @main.route("/", methods=["GET", "POST"])
 def index():
     form = PostForm()
-    if current_user.can(Permission.WRITE) and form.validate_on_submit():
+    if request.method == "POST" and not current_user.can(Permission.WRITE):
+        # Anonymous/muted submissions were previously dropped silently
+        # (the page re-rendered 200 with no post and no message).
+        if not current_user.is_authenticated:
+            flash("You must be logged in to publish a post.", "warning")
+            return redirect(url_for("auth.login", next=url_for(".index")))
+        abort(403)
+    if form.validate_on_submit():
         post = Post(body=form.body.data, author=current_user._get_current_object())
         db.session.add(post)
         db.session.commit()
@@ -88,11 +101,14 @@ def edit_profile():
         db.session.add(current_user._get_current_object())
         db.session.commit()
         current_app.logger.info(f"User updated profile: {current_user.email}")
-        flash("Your profile has been updated.")
+        flash("Your profile has been updated.", "success")
         return redirect(url_for(".user", username=current_user.username))
-    form.name.data = current_user.name
-    form.location.data = current_user.location
-    form.about_me.data = current_user.about_me
+    if request.method == "GET":
+        # Only pre-populate on GET: re-assigning after a failed POST would
+        # wipe whatever the user typed and replace it with the old values.
+        form.name.data = current_user.name
+        form.location.data = current_user.location
+        form.about_me.data = current_user.about_me
     return render_template("edit_profile.html", form=form)
 
 
@@ -101,30 +117,67 @@ def edit_profile():
 @admin_required
 def edit_profile_admin(id):
     user = db.get_or_404(User, id)
+    if user.deleted_at:
+        flash("This account has been deleted; no further changes are possible.", "error")
+        return redirect(url_for(".user", username=user.username))
     form = EditProfileAdminForm(user=user)
     if form.validate_on_submit():
+        actor = current_user._get_current_object()
+        old_role = user.role.name if user.role else None
+        new_role = db.session.get(Role, form.role.data)
+        if new_role is None:
+            flash("Unknown role.", "error")
+            return redirect(url_for(".edit_profile_admin", id=user.id))
+        new_role_name = new_role.name
+
+        # Same guardrails as the admin console.
+        if old_role != new_role_name:
+            if user == actor:
+                flash("Use another administrator account to change your own role.", "error")
+                return redirect(url_for(".edit_profile_admin", id=user.id))
+            if (
+                user.active
+                and user.can(Permission.ADMIN)
+                and not new_role.has_admin
+                and active_administrator_count(exclude_user_id=user.id) == 0
+            ):
+                flash("Cannot demote the last administrator.", "error")
+                return redirect(url_for(".edit_profile_admin", id=user.id))
+
         user.email = form.email.data
         user.username = form.username.data
         user.confirmed = form.confirmed.data
-        user.role = db.session.get(Role, form.role.data)
+        user.role = new_role
         user.name = form.name.data
         user.location = form.location.data
         user.about_me = form.about_me.data
         db.session.add(user)
+        if old_role != new_role_name:
+            record_audit(
+                Event.USER_ROLE_CHANGED,
+                actor=actor,
+                target_type="user",
+                target_id=user.id,
+                target_label=user.email,
+                detail={"from": old_role, "to": new_role_name, "via": "edit_profile_admin"},
+                commit=False,
+            )
         db.session.commit()
         current_app.logger.info(
             f"Admin {current_user.email} updated profile of user {user.email} "
             f"(role: {user.role.name}, confirmed: {user.confirmed})"
         )
-        flash("The profile has been updated.")
+        flash("The profile has been updated.", "success")
         return redirect(url_for(".user", username=user.username))
-    form.email.data = user.email
-    form.username.data = user.username
-    form.confirmed.data = user.confirmed
-    form.role.data = user.role_id
-    form.name.data = user.name
-    form.location.data = user.location
-    form.about_me.data = user.about_me
+    if request.method == "GET":
+        # Only pre-populate on GET so a failed POST keeps the submitted values.
+        form.email.data = user.email
+        form.username.data = user.username
+        form.confirmed.data = user.confirmed
+        form.role.data = user.role_id
+        form.name.data = user.name
+        form.location.data = user.location
+        form.about_me.data = user.about_me
     return render_template("edit_profile.html", form=form, user=user)
 
 
@@ -132,10 +185,12 @@ def edit_profile_admin(id):
 def post(id):
     post = db.get_or_404(Post, id, options=[joinedload(Post.author)])
     form = CommentForm()
+    if request.method == "POST" and not current_user.is_authenticated:
+        # Check before validation so *every* anonymous POST bounces to the
+        # login page, not only the ones that happen to pass validation.
+        flash("You must be logged in to comment.", "warning")
+        return redirect(url_for("auth.login", next=url_for(".post", id=post.id)))
     if form.validate_on_submit():
-        if not current_user.is_authenticated:
-            flash("You must be logged in to comment.")
-            return redirect(url_for("auth.login", next=url_for(".post", id=post.id)))
         if not current_user.can(Permission.COMMENT):
             abort(403)
         comment = Comment(body=form.body.data, post=post, author=current_user._get_current_object())
@@ -144,7 +199,7 @@ def post(id):
         current_app.logger.info(
             f'User {current_user.email} commented on post {post.id}: "{comment.body[:50]}..."'
         )
-        flash("Your comment has been published.")
+        flash("Your comment has been published.", "success")
         return redirect(url_for(".post", id=post.id, page=-1))
     page = request.args.get("page", 1, type=int)
     if page == -1:
@@ -166,7 +221,7 @@ def post(id):
 @login_required
 def edit(id):
     post = db.get_or_404(Post, id)
-    if current_user != post.author and not current_user.can(Permission.ADMIN):
+    if not owner_or_permission(current_user._get_current_object(), post):
         current_app.logger.warning(
             f"Unauthorized edit attempt by {current_user.email} on post {post.id}"
         )
@@ -176,9 +231,11 @@ def edit(id):
         post.body = form.body.data
         db.session.add(post)
         db.session.commit()
-        flash("The post has been updated.")
+        flash("The post has been updated.", "success")
         return redirect(url_for(".post", id=post.id))
-    form.body.data = post.body
+    if request.method == "GET":
+        # Only pre-populate on GET so a failed POST keeps the submitted text.
+        form.body.data = post.body
     return render_template("edit_post.html", form=form)
 
 
@@ -186,7 +243,7 @@ def edit(id):
 def followed_by(username):
     user = User.query.filter_by(username=username).first()
     if user is None:
-        flash("Invalid user.")
+        flash("Invalid user.", "error")
         return redirect(url_for(".index"))
     page = request.args.get("page", 1, type=int)
     pagination = user.followed.paginate(
@@ -209,15 +266,19 @@ def followed_by(username):
 def follow(username):
     user = User.query.filter_by(username=username).first()
     if user is None:
-        flash("Invalid user.")
+        flash("Invalid user.", "error")
         return redirect(url_for(".index"))
+    if user == current_user._get_current_object():
+        # Self-follows would corrupt the profile's follower arithmetic.
+        flash("You cannot follow yourself.", "warning")
+        return redirect(url_for(".user", username=username))
     if current_user.is_following(user):
-        flash("You are already following this user.")
+        flash("You are already following this user.", "warning")
         return redirect(url_for(".user", username=username))
     current_user.follow(user)
     db.session.commit()
     current_app.logger.info(f"{current_user.email} followed {user.email}")
-    flash("You are now following %s." % username)
+    flash("You are now following %s." % username, "success")
     return redirect(url_for(".user", username=username))
 
 
@@ -227,15 +288,20 @@ def follow(username):
 def unfollow(username):
     user = User.query.filter_by(username=username).first()
     if user is None:
-        flash("Invalid user.")
+        flash("Invalid user.", "error")
         return redirect(url_for(".index"))
+    if user == current_user._get_current_object():
+        # Users follow themselves at registration; dropping that row would
+        # make the profile show "-1" followers.
+        flash("You cannot unfollow yourself.", "warning")
+        return redirect(url_for(".user", username=username))
     if not current_user.is_following(user):
-        flash("You are not following this user.")
+        flash("You are not following this user.", "warning")
         return redirect(url_for(".user", username=username))
     current_user.unfollow(user)
     db.session.commit()
     current_app.logger.info(f"{current_user.email} unfollowed {user.email}")
-    flash("You are not following %s anymore." % username)
+    flash("You are not following %s anymore." % username, "success")
     return redirect(url_for(".user", username=username))
 
 
@@ -243,7 +309,7 @@ def unfollow(username):
 def followers(username):
     user = User.query.filter_by(username=username).first()
     if user is None:
-        flash("Invalid user.")
+        flash("Invalid user.", "error")
         return redirect(url_for(".index"))
     page = request.args.get("page", 1, type=int)
     pagination = user.followers.paginate(
@@ -264,7 +330,14 @@ def followers(username):
 @login_required
 def show_all():
     resp = make_response(redirect(url_for(".index")))
-    resp.set_cookie("show_followed", "", max_age=30 * 24 * 60 * 60)
+    resp.set_cookie(
+        "show_followed",
+        "",
+        max_age=30 * 24 * 60 * 60,
+        secure=request.is_secure,
+        httponly=True,
+        samesite="Lax",
+    )
     return resp
 
 
@@ -272,7 +345,14 @@ def show_all():
 @login_required
 def show_followed():
     resp = make_response(redirect(url_for(".index")))
-    resp.set_cookie("show_followed", "1", max_age=30 * 24 * 60 * 60)
+    resp.set_cookie(
+        "show_followed",
+        "1",
+        max_age=30 * 24 * 60 * 60,
+        secure=request.is_secure,
+        httponly=True,
+        samesite="Lax",
+    )
     return resp
 
 
@@ -297,8 +377,18 @@ def moderate():
 @permission_required(Permission.MODERATE)
 def moderate_enable(id):
     comment = db.get_or_404(Comment, id)
+    was_disabled = comment.disabled
     comment.disabled = False
+    record_audit(
+        Event.COMMENT_MODERATED,
+        actor=current_user._get_current_object(),
+        target_type="comment",
+        target_id=comment.id,
+        detail={"disabled": False, "was_disabled": was_disabled},
+        commit=False,
+    )
     db.session.commit()
+    flash("Comment enabled.", "success")
     page = request.values.get("page", 1, type=int)
     return redirect(url_for(".moderate", page=page))
 
@@ -308,8 +398,18 @@ def moderate_enable(id):
 @permission_required(Permission.MODERATE)
 def moderate_disable(id):
     comment = db.get_or_404(Comment, id)
+    was_disabled = comment.disabled
     comment.disabled = True
+    record_audit(
+        Event.COMMENT_MODERATED,
+        actor=current_user._get_current_object(),
+        target_type="comment",
+        target_id=comment.id,
+        detail={"disabled": True, "was_disabled": was_disabled},
+        commit=False,
+    )
     db.session.commit()
+    flash("Comment disabled.", "success")
     page = request.values.get("page", 1, type=int)
     return redirect(url_for(".moderate", page=page))
 
@@ -329,7 +429,7 @@ def like_post(id):
     if request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return {"liked": liked, "likes_count": post.likes.count()}
 
-    flash("Liked post!" if liked else "Unliked post.")
+    flash("Liked post!" if liked else "Unliked post.", "success" if liked else "info")
     next_url = request.referrer
     if not next_url or not is_safe_redirect_url(next_url):
         next_url = url_for(".index")
@@ -344,9 +444,10 @@ def search():
     users = []
     pagination = None
     if query:
+        like = f"%{escape_like(query)}%"
         post_query = (
             Post.query.options(joinedload(Post.author))
-            .filter(Post.body.ilike(f"%{query}%"))
+            .filter(Post.body.ilike(like, escape="\\"))
             .order_by(Post.timestamp.desc())
         )
         pagination = post_query.paginate(
@@ -354,7 +455,9 @@ def search():
         )
         posts = pagination.items
         users = (
-            User.query.filter((User.username.ilike(f"%{query}%")) | (User.name.ilike(f"%{query}%")))
+            User.query.filter(
+                (User.username.ilike(like, escape="\\")) | (User.name.ilike(like, escape="\\"))
+            )
             .limit(10)
             .all()
         )

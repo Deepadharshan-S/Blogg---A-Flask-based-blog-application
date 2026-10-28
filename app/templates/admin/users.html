@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+
+{% block title %}Blogg - Manage Users{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+  <h1>Manage Users</h1>
+</div>
+
+{% set active = 'users' %}
+{% include 'admin/_nav.html' %}
+
+<form class="form-inline" method="get" action="{{ url_for('admin.users') }}" style="margin-bottom: 15px;">
+  <div class="form-group">
+    <input type="text" class="form-control" name="q" placeholder="Search email / username / name"
+           value="{{ request.args.get('q', '') }}">
+  </div>
+  <div class="form-group">
+    {{ form.role(class_="form-control") }}
+  </div>
+  <div class="form-group">
+    {{ form.status(class_="form-control") }}
+  </div>
+  <button type="submit" class="btn btn-default">Filter</button>
+  <a class="btn btn-link" href="{{ url_for('admin.users') }}">Reset</a>
+</form>
+
+<div class="panel panel-default">
+  <table class="table table-striped" style="margin-bottom: 0;">
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th>MFA</th>
+        <th>Last seen</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>
+          <img src="{{ u.gravatar(size=24) }}" class="img-circle" alt="">
+          <a href="{{ url_for('admin.user_detail', id=u.id) }}"><strong>{{ u.username }}</strong></a>
+        </td>
+        <td>{{ u.email }}</td>
+        <td><span class="label label-info">{{ u.role.name if u.role else "-" }}</span></td>
+        <td>
+          {% if not u.active %}
+          <span class="label label-danger">Disabled</span>
+          {% elif u.is_locked %}
+          <span class="label label-warning">Locked</span>
+          {% elif not u.confirmed %}
+          <span class="label label-default">Unconfirmed</span>
+          {% else %}
+          <span class="label label-success">Active</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if u.mfa_enabled %}<span class="label label-success">On</span>
+          {% else %}<span class="label label-default">Off</span>{% endif %}
+        </td>
+        <td>{{ moment(u.last_seen).fromNow() if u.last_seen else "-" }}</td>
+        <td><a class="btn btn-xs btn-default" href="{{ url_for('admin.user_detail', id=u.id) }}">Manage</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-muted">No users match this filter.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if pagination.pages > 1 %}
+<div class="pagination">
+  {{ macros.pagination_widget(pagination, 'admin.users', q=request.args.get('q', ''),
+      role=request.args.get('role', ''), status=request.args.get('status', '')) }}
+</div>
+{% endif %}
+{% endblock %}

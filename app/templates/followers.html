@@ -8,32 +8,36 @@
       <h1>{{ title }} {{ user.username }}</h1>
   </div>
   
-  <table class="followers-table">
-      <thead>
-          <tr>
-              <th>User</th>
-              <th>Since</th>
-          </tr>
-      </thead>
-      <tbody>
-          {% for follow in follows %}
-          {% if follow.user != user %}
-          <tr>
-              <td>
-                  <a href="{{ url_for('.user', username=follow.user.username) }}" class="profile-link">
-                      <img class="profile-image" src="{{ follow.user.gravatar(size=32) }}">
-                      {{ follow.user.username }}
-                  </a>
-              </td>
-              <td>{{ moment(follow.timestamp).format('L') }}</td>
-          </tr>
-          {% endif %}
-          {% endfor %}
-      </tbody>
-  </table>
+  <div class="table-responsive">
+      <table class="followers-table">
+          <thead>
+              <tr>
+                  <th>User</th>
+                  <th>Since</th>
+              </tr>
+          </thead>
+          <tbody>
+              {% for follow in follows %}
+              {% if follow.user != user %}
+              <tr>
+                  <td>
+                      <a href="{{ url_for('.user', username=follow.user.username) }}" class="profile-link">
+                          <img class="profile-image" src="{{ follow.user.gravatar(size=32) }}" alt="{{ follow.user.username }}">
+                          {{ follow.user.username }}
+                      </a>
+                  </td>
+                  <td>{{ moment(follow.timestamp).format('L') }}</td>
+              </tr>
+              {% endif %}
+              {% endfor %}
+          </tbody>
+      </table>
+  </div>
   
+  {% if pagination and pagination.pages > 1 %}
   <div class="pagination">
       {{ macros.pagination_widget(pagination, endpoint, username=user.username) }}
   </div>
+  {% endif %}
   {% endblock %}
   
