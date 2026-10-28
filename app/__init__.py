@@ -153,14 +153,17 @@ def create_app(config_name):
         record_access(response, duration_ms=duration_ms)
         return response
 
-    if not os.path.exists("logs"):
-        os.mkdir("logs")
-    file_handler = RotatingFileHandler("logs/blogg.log", maxBytes=10 * 1024 * 1024, backupCount=10)
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] in %(module)s: %(message)s")
-    )
-    file_handler.setLevel(logging.INFO)
-    app.logger.addHandler(file_handler)
+    if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
+        if not os.path.exists("logs"):
+            os.mkdir("logs")
+        file_handler = RotatingFileHandler(
+            "logs/blogg.log", maxBytes=10 * 1024 * 1024, backupCount=10
+        )
+        file_handler.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] in %(module)s: %(message)s")
+        )
+        file_handler.setLevel(logging.INFO)
+        app.logger.addHandler(file_handler)
 
     app.logger.setLevel(logging.INFO)
     app.logger.info("Blogg startup")
