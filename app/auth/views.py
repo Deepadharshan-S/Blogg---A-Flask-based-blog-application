@@ -257,7 +257,10 @@ def before_request():
         return redirect(url_for("auth.change_password"))
 
     user.ping()
-    if not user.confirmed and request.blueprint != "auth":
+    # Only gate real routes: on routing exceptions (404/405) url_rule is None
+    # and request.blueprint is None too, which would wrongly bounce the user
+    # to the unconfirmed page instead of the error page.
+    if request.url_rule is not None and not user.confirmed and request.blueprint != "auth":
         return redirect(url_for("auth.unconfirmed"))
 
 
@@ -303,7 +306,7 @@ def register():
         db.session.commit()
 
         flash(
-            "Your account has been created. Check your inbox for a confirmation link, then log in.",
+            "Your account has been created. You can now login. Check your inbox for a confirmation link.",
             "success",
         )
         return redirect(url_for("auth.login"))
