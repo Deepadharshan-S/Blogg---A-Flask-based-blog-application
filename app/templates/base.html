@@ -78,7 +78,7 @@
         </li>
         {% endif %}
 
-        {% if current_user.can(Permission.MANAGE_USERS) and current_user.confirmed %}
+        {% if (current_user.can(Permission.MANAGE_USERS) or current_user.can(Permission.ADMIN)) and current_user.confirmed %}
         <li>
           <a href="{{ url_for('admin.dashboard') }}">Admin</a>
         </li>
