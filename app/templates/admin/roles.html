@@ -47,7 +47,7 @@
           <a class="btn btn-xs btn-default" href="{{ url_for('admin.role_edit', id=role.id) }}">Edit</a>
           {% if not role.is_builtin and role.user_count == 0 and not role.default %}
           <form method="post" action="{{ url_for('admin.role_delete', id=role.id) }}"
-                class="d-inline" onsubmit="return confirm('Delete role {{ role.name }}?');">
+                class="d-inline" data-confirm="Delete role {{ role.name }}?">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-xs btn-danger">Delete</button>
           </form>

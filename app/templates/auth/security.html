@@ -39,7 +39,7 @@
           <form
             action="{{ url_for('auth.mfa_regenerate_backup_codes') }}"
             method="post"
-            onsubmit="return confirm('Generate new backup codes? Your current backup codes will stop working.');"
+            data-confirm="Generate new backup codes? Your current backup codes will stop working."
           >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-default btn-sm" type="submit">
@@ -95,7 +95,7 @@
             class="panel-heading-form"
             action="{{ url_for('auth.session_revoke_all') }}"
             method="post"
-            onsubmit="return confirm('Sign out of all devices, including this one?');"
+            data-confirm="Sign out of all devices, including this one?"
           >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-danger" type="submit">Sign out everywhere</button>
@@ -161,7 +161,7 @@
         <form
           method="post"
           action="{{ url_for('auth.delete_account') }}"
-          onsubmit="return confirm('Delete your account permanently?');"
+          data-confirm="Delete your account permanently?"
         >
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="form-group">

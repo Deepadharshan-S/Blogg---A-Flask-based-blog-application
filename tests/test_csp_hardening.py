@@ -50,6 +50,18 @@ class CSPHardeningTestCase(IAMTestCase):
             "style-src must include a cryptographic nonce",
         )
 
+        # Verify script-src-attr directive allows jQuery feature-detection hash via unsafe-hashes
+        self.assertIn("script-src-attr", csp)
+        self.assertIn("'sha256-47mKTaNxEn1L3mSDAz9muidMqwW3Gxcw7CFAK/YnPdg='", csp)
+
+    def test_no_inline_event_handlers_in_templates(self):
+        """Verify rendered pages avoid inline onsubmit/onclick handlers in favor of data-confirm."""
+        for path in ["/", "/auth/login", "/auth/register"]:
+            res = self.client.get(path)
+            self.assertEqual(res.status_code, 200)
+            html = res.get_data(as_text=True)
+            self.assertNotIn("onsubmit=", html, f"Path {path} must not contain inline onsubmit")
+
     def test_csp_disallows_http_origins(self):
         """SEC-ASSESS-001: Verify all external CDN origins strictly enforce HTTPS."""
         response = self.client.get("/")

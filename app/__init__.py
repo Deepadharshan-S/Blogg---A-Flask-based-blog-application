@@ -206,7 +206,8 @@ def create_app(config_name):
 
         csp_directives = [
             "default-src 'self'",
-            f"script-src 'self' 'nonce-{nonce}' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
+            f"script-src 'self' 'nonce-{nonce}' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-hashes' 'sha256-47mKTaNxEn1L3mSDAz9muidMqwW3Gxcw7CFAK/YnPdg='",
+            "script-src-attr 'unsafe-hashes' 'sha256-47mKTaNxEn1L3mSDAz9muidMqwW3Gxcw7CFAK/YnPdg='",
             f"style-src 'self' 'nonce-{nonce}' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
             "font-src 'self' https://fonts.gstatic.com data:",
             "img-src 'self' data: https://*.gravatar.com https://secure.gravatar.com https://www.gravatar.com",

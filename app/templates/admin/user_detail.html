@@ -141,7 +141,7 @@
 
           <form
             method="post"
-            onsubmit="return confirm('Delete this account? Their posts remain as an anonymous tombstone.');"
+            data-confirm="Delete this account? Their posts remain as an anonymous tombstone."
           >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="delete_user">

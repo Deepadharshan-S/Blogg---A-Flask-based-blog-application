@@ -220,6 +220,14 @@
         navCollapse.classList.toggle('in');
       });
     }
+
+    // Global confirmation handler using data-confirm attribute
+    document.addEventListener('submit', function(e) {
+      var msg = e.target.getAttribute('data-confirm');
+      if (msg && !window.confirm(msg)) {
+        e.preventDefault();
+      }
+    });
   });
 </script>
 {% endblock %}
