@@ -308,14 +308,6 @@ class User(UserMixin, db.Model):
         if self.password_changed_at is None:
             self.password_changed_at = datetime.now(timezone.utc)
 
-    @staticmethod
-    def add_self_follows():
-        for user in User.query.all():
-            if not user.is_following(user):
-                user.follow(user)
-                db.session.add(user)
-        db.session.commit()
-
     @property
     def password(self):
         raise AttributeError("password is not a readable attribute")

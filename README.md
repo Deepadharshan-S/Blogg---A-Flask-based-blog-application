@@ -111,7 +111,9 @@ sequenceDiagram
 
 - **Server-Side Session Tracking (`UserSession`)**: Each authenticated login issues a UUID `jti` stored in the session cookie. The database stores device IP, user agent, `created_at`, `last_seen_at`, and `expires_at`. Enforces idle timeouts (`BLOGG_SESSION_IDLE_MINUTES`) and absolute timeouts (`BLOGG_SESSION_ABSOLUTE_HOURS`).
 - **Stateless Remember-Me Revocation (Epoch Cutoff)**: Flask-Login remember cookies are signed tokens. Under typical implementations, revoking database session rows leaves remember-me tokens valid. Blogg overcomes this by tagging the identity string returned by `User.get_id()`:
-  $$\text{Identity} = \text{user\_id} \mathbin{\Vert} \text{"."} \mathbin{\Vert} \text{sessions\_revoked\_at\_epoch}$$
+  ```text
+  Identity Format: f"{user_id}.{sessions_revoked_at_epoch}"
+  ```
   When a user changes their password, clicks "Sign out of all other sessions", or an admin revokes sessions, `User.sessions_revoked_at` is updated to UTC now. `load_user()` verifies that the epoch in the cookie matches the user's current cutoff. Any cookie issued prior to the cutoff is instantly refused at load time without polling or database bloat.
 
 ### 4. Password Policy & Account Lifecycle
@@ -261,7 +263,7 @@ All IAM settings default sensibly if omitted:
 | Environment Variable | Default | Purpose |
 | :--- | :---: | :--- |
 | `SECRET_KEY` | *None* | Cryptographic signing key. Fails fast in production; auto-generates ephemeral key in development. |
-| `BLOGG_ADMIN` | `deepadharshan251@gmail.com` | Default administrator email address. |
+| `BLOGG_ADMIN` | `admin@example.com` | Default administrator email address. |
 | `BLOGG_MAX_FAILED_LOGINS` | `5` | Maximum failed logins before temporary account lockout. |
 | `BLOGG_LOCKOUT_MINUTES` | `15` | Duration of temporary account lockout in minutes. |
 | `BLOGG_SESSION_IDLE_MINUTES` | `60` | Inactivity idle timeout for browser sessions. |

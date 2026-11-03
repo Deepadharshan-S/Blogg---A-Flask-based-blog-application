@@ -18,7 +18,7 @@ class Config:
     MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
     BLOGG_MAIL_SUBJECT_PREFIX = "[BLOGG]"
-    BLOGG_ADMIN = os.environ.get("BLOGG_ADMIN", "deepadharshan251@gmail.com")
+    BLOGG_ADMIN = os.environ.get("BLOGG_ADMIN", "admin@example.com")
     BLOGG_MAIL_SENDER = os.environ.get("BLOGG_MAIL_SENDER", f"BLOGG Admin <{BLOGG_ADMIN}>")
     BLOGG_POSTS_PER_PAGE = 20
     BLOGG_FOLLOWERS_PER_PAGE = 50
@@ -67,9 +67,6 @@ class Config:
     # Retention windows (days) enforced by `flask prune-logs`; 0 keeps records forever.
     BLOGG_ACCESS_LOG_RETENTION_DAYS = int(os.environ.get("BLOGG_ACCESS_LOG_RETENTION_DAYS", "0"))
     BLOGG_AUDIT_RETENTION_DAYS = int(os.environ.get("BLOGG_AUDIT_RETENTION_DAYS", "0"))
-
-    # Rate limiting: in-memory by default (tests/dev), persistent in production.
-    RATELIMIT_STORAGE_URI = "memory://"
 
     # Cookie hardening: identity cookies are JS-invisible and never sent
     # cross-site without a top-level navigation (mitigates CSRF + theft).
