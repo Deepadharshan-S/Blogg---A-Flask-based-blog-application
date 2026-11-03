@@ -147,3 +147,45 @@ class CSPHardeningTestCase(IAMTestCase):
             csp = res.headers.get("Content-Security-Policy", "")
             self.assertNotIn("'unsafe-inline'", csp)
             self.assertIn("'nonce-", csp)
+
+    def test_flask_pagedown_includes_csp_nonce_and_https_cdn(self):
+        """Verify Flask-Pagedown scripts enforce HTTPS and include active CSP nonce."""
+        with self.app.test_request_context("/"):
+            g.csp_nonce = "test-pagedown-nonce-456"
+            import flask_pagedown
+
+            pd = flask_pagedown._pagedown()
+            rendered = pd.include_pagedown()
+            self.assertIn("https://cdnjs.cloudflare.com", rendered)
+            self.assertNotIn("http://cdnjs.cloudflare.com", rendered)
+            self.assertIn('nonce="test-pagedown-nonce-456"', rendered)
+
+    def test_flask_pagedown_widget_includes_csp_nonce(self):
+        """Verify Flask-Pagedown form widget injects active CSP nonce on inline preview script."""
+        with self.app.test_request_context("/"):
+            g.csp_nonce = "test-widget-nonce-789"
+            from app.main.forms import PostForm
+
+            form = PostForm()
+            rendered = str(form.body())
+            self.assertIn('<script type="text/javascript" nonce="test-widget-nonce-789">', rendered)
+
+    def test_flask_moment_no_inline_styles(self):
+        """Verify Flask-Moment rendering does not introduce inline style='display: none'."""
+        with self.app.test_request_context("/"):
+            import datetime
+
+            import flask_moment
+
+            m = flask_moment.moment(datetime.datetime.now(datetime.timezone.utc))
+            rendered = m.fromNow()
+            self.assertNotIn('style="display: none"', rendered)
+            self.assertNotIn('style="display:none"', rendered)
+
+    def test_gravatar_uses_https_url(self):
+        """Verify User.gravatar always returns an HTTPS URL compliant with CSP."""
+        user = self.make_user(email="avatar_test@example.com")
+        with self.app.test_request_context("/"):
+            url = user.gravatar(size=48)
+            self.assertTrue(url.startswith("https://secure.gravatar.com/avatar/"))
+            self.assertNotIn("http://", url)

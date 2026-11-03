@@ -53,6 +53,54 @@ def _nonce_aware_include_moment(cls, *args, **kwargs):
 
 flask_moment.moment.include_moment = _nonce_aware_include_moment
 
+# Patch flask_moment.moment._render to eliminate inline style="display: none" (violates CSP style-src)
+_orig_moment_render = flask_moment.moment._render
+
+
+def _clean_moment_render(self, *args, **kwargs):
+    rendered = str(_orig_moment_render(self, *args, **kwargs))
+    rendered = rendered.replace(' style="display: none"', "").replace(' style="display:none"', "")
+    return Markup(rendered)
+
+
+flask_moment.moment._render = _clean_moment_render
+
+# Patch flask_pagedown to enforce HTTPS CDN and attach CSP nonces to scripts
+import flask_pagedown.widgets
+
+_orig_pagedown_include = flask_pagedown._pagedown.include_pagedown
+
+
+def _nonce_aware_include_pagedown(self, *args, **kwargs):
+    rendered = str(_orig_pagedown_include(self, *args, **kwargs))
+    rendered = rendered.replace('src="//cdnjs.cloudflare.com', 'src="https://cdnjs.cloudflare.com')
+    if has_request_context():
+        nonce = getattr(g, "csp_nonce", None)
+        if nonce:
+            rendered = rendered.replace("<script", f'<script nonce="{nonce}"')
+    return Markup(rendered)
+
+
+flask_pagedown._pagedown.include_pagedown = _nonce_aware_include_pagedown
+flask_pagedown._pagedown.html_head = _nonce_aware_include_pagedown
+
+_orig_pagedown_call = flask_pagedown.widgets.PageDown.__call__
+
+
+def _nonce_aware_pagedown_call(self, field, **kwargs):
+    rendered = str(_orig_pagedown_call(self, field, **kwargs))
+    if has_request_context():
+        nonce = getattr(g, "csp_nonce", None)
+        if nonce:
+            rendered = rendered.replace(
+                '<script type="text/javascript">',
+                f'<script type="text/javascript" nonce="{nonce}">',
+            )
+    return Markup(rendered)
+
+
+flask_pagedown.widgets.PageDown.__call__ = _nonce_aware_pagedown_call
+
 
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
