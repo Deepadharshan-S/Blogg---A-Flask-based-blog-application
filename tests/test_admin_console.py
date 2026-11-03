@@ -66,7 +66,7 @@ class AdminConsoleTestCase(IAMTestCase):
         self.login(email=self.admin.email)
         response = self.post_form(
             f"/admin/users/{self.user.id}",
-            {"action": "role", "role_id": self.moderator_role.id},
+            {"action": "role", "role_id": self.moderator_role.id, "admin_password": "Password123!"},
             page=f"/admin/users/{self.user.id}",
             follow_redirects=True,
         )
@@ -130,7 +130,7 @@ class AdminConsoleTestCase(IAMTestCase):
         self.login(email=self.admin.email)
         response = self.post_form(
             f"/admin/users/{self.admin.id}",
-            {"action": "role", "role_id": self.user_role.id},
+            {"action": "role", "role_id": self.user_role.id, "admin_password": "Password123!"},
             page=f"/admin/users/{self.admin.id}",
             follow_redirects=True,
         )
@@ -162,7 +162,7 @@ class AdminConsoleTestCase(IAMTestCase):
         # Demotion blocked.
         response = self.post_form(
             f"/admin/users/{self.admin.id}",
-            {"action": "role", "role_id": self.user_role.id},
+            {"action": "role", "role_id": self.user_role.id, "admin_password": "Password123!"},
             page=f"/admin/users/{self.admin.id}",
             follow_redirects=True,
         )
@@ -259,6 +259,7 @@ class AdminConsoleTestCase(IAMTestCase):
     # ------------------------------------------------------------------
     def test_role_crud_with_guards(self):
         self.login(email=self.admin.email)
+        self.step_up_admin()
 
         # Create.
         response = self.post_form(
@@ -342,6 +343,7 @@ class AdminConsoleTestCase(IAMTestCase):
 
         self.logout()
         self.login(email=self.admin.email)
+        self.step_up_admin()
         response = self.post_form(
             f"/admin/roles/{admin_role.id}/edit",
             {"name": "Administrator", "manage_users": "y", "view_audit": "y"},

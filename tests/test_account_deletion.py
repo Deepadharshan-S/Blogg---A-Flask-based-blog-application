@@ -122,7 +122,7 @@ class AccountDeletionTestCase(IAMTestCase):
 
         response = self.post_form(
             f"/admin/users/{self.user.id}",
-            {"action": "delete_user"},
+            {"action": "delete_user", "admin_password": "Password123!"},
             page=f"/admin/users/{self.user.id}",
             follow_redirects=True,
         )
@@ -152,7 +152,7 @@ class AccountDeletionTestCase(IAMTestCase):
         # Admins delete others, not themselves, from the console.
         response = self.post_form(
             f"/admin/users/{self.admin.id}",
-            {"action": "delete_user"},
+            {"action": "delete_user", "admin_password": "Password123!"},
             page=f"/admin/users/{self.admin.id}",
             follow_redirects=True,
         )
@@ -172,7 +172,7 @@ class AccountDeletionTestCase(IAMTestCase):
         self.login(email=ops.email)
         response = self.post_form(
             f"/admin/users/{self.admin.id}",
-            {"action": "delete_user"},
+            {"action": "delete_user", "admin_password": "Password123!"},
             page=f"/admin/users/{self.admin.id}",
             follow_redirects=True,
         )

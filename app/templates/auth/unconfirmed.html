@@ -8,15 +8,15 @@
     <div class="auth-header text-center">
       <div class="auth-icon">📬</div>
       <h2>Hello, {{ current_user.username }}!</h2>
-      <p style="color: #ef4444; font-weight: 600; margin-top: 4px;">Your account is not confirmed yet.</p>
+      <p class="text-danger-semibold mt-4">Your account is not confirmed yet.</p>
     </div>
 
-    <div class="auth-body text-center" style="color: var(--text-body); line-height: 1.6;">
+    <div class="auth-body text-center line-height-1-6">
       <p>
         Before you can access Blogg, you need to confirm your account.
         Please check your inbox for a confirmation email with a link.
       </p>
-      <div style="margin-top: 24px; margin-bottom: 8px;">
+      <div class="mt-24 mb-8">
         <a href="{{ url_for('auth.resend_confirmation') }}" class="btn btn-primary btn-block">Resend Confirmation Email</a>
       </div>
     </div>
@@ -27,9 +27,9 @@
       </div>
       <p class="auth-subtext">
         Need to sign out?
-        <form action="{{ url_for('auth.logout') }}" method="post" style="display:inline;">
+        <form action="{{ url_for('auth.logout') }}" method="post" class="d-inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="auth-register-link" style="background:none;border:none;cursor:pointer;padding:0;font-size:14px;">Log out &rarr;</button>
+          <button type="submit" class="auth-register-link btn-unstyled-link">Log out &rarr;</button>
         </form>
       </p>
     </div>

@@ -67,7 +67,7 @@ def _login_rate_limit():
 
 
 def _post_login_redirect():
-    next_url = request.args.get("next")
+    next_url = request.args.get("next") or session.pop("next", None)
     if not is_safe_url(next_url):
         next_url = url_for("main.index")
     return next_url

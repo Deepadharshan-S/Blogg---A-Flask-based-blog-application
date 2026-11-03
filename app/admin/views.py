@@ -11,6 +11,7 @@ from sqlalchemy import and_, or_
 from .. import db
 from ..decorators import audit_required, manage_users_required
 from ..email import send_email
+from ..main.views import is_safe_redirect_url
 from ..models import (
     AccessLog,
     ApiToken,
@@ -27,11 +28,13 @@ from ..security import (
     active_administrator_count,
     administrator_count,
     escape_like,
+    is_admin_step_up_valid,
     record_audit,
     revoke_user_sessions,
+    verify_admin_step_up,
 )
 from . import admin
-from .forms import RoleForm, UserFilterForm
+from .forms import RoleForm, StepUpForm, UserFilterForm
 
 
 def _page():
@@ -66,6 +69,55 @@ def dashboard():
     }
     recent = AuditEvent.query.order_by(AuditEvent.timestamp.desc()).limit(12).all()
     return render_template("admin/dashboard.html", stats=stats, recent=recent)
+
+
+# ---------------------------------------------------------------------------
+# Administrative Step-Up Authentication (BLOGG-SEC-018)
+# ---------------------------------------------------------------------------
+
+
+@admin.route("/step-up", methods=["GET", "POST"])
+@login_required
+def step_up():
+    if not (current_user.can(Permission.MANAGE_USERS) or current_user.can(Permission.ADMIN)):
+        abort(403)
+    actor = current_user._get_current_object()
+    form = StepUpForm()
+    next_url = request.args.get("next") or request.form.get("next") or ""
+    if not is_safe_redirect_url(next_url):
+        next_url = url_for("admin.dashboard")
+
+    if is_admin_step_up_valid(actor):
+        flash("Administrator step-up authentication is already active.", "info")
+        return redirect(next_url)
+
+    if form.validate_on_submit():
+        password = form.password.data
+        otp = (form.otp.data or "").strip() if getattr(form, "otp", None) else None
+        if verify_admin_step_up(password, actor, otp=otp):
+            flash("Administrative step-up authentication confirmed.", "success")
+            return redirect(next_url)
+        else:
+            if actor.mfa_enabled and not actor.verify_mfa_code(otp):
+                flash(
+                    "Administrator verification failed: invalid or missing two-factor authentication code.",
+                    "error",
+                )
+            else:
+                flash("Administrator password verification failed: incorrect password.", "error")
+            return render_template(
+                "admin/step_up.html",
+                form=form,
+                next_url=next_url,
+                is_step_up_valid=False,
+            ), 401
+
+    return render_template(
+        "admin/step_up.html",
+        form=form,
+        next_url=next_url,
+        is_step_up_valid=is_admin_step_up_valid(actor),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +180,24 @@ def user_detail(id):
         if user.deleted_at:
             flash("This account has been deleted; no further actions are possible.", "error")
             return redirect(url_for("admin.user_detail", id=id))
+
+        # IAM (BLOGG-SEC-018): Require administrator step-up re-authentication
+        # before high-impact operations (role modifications and account deletion).
+        if action in ("role", "delete_user"):
+            admin_password = request.form.get("admin_password") or request.form.get("password")
+            admin_otp = request.form.get("admin_otp") or request.form.get("otp")
+            if admin_password:
+                if not verify_admin_step_up(admin_password, actor, target_user=user, otp=admin_otp):
+                    flash(
+                        "Administrator password verification failed: incorrect password or two-factor authentication code.",
+                        "error",
+                    )
+                    return redirect(url_for("admin.user_detail", id=id))
+            elif not is_admin_step_up_valid(actor):
+                flash(
+                    "Administrator password re-authentication required for this operation.", "error"
+                )
+                return redirect(url_for("admin.step_up", next=request.url))
 
         if action == "role":
             role = db.session.get(Role, request.form.get("role_id", type=int))
@@ -344,6 +414,7 @@ def user_detail(id):
         sessions=sessions,
         events=events,
         is_locked=user.is_locked,
+        is_step_up_valid=is_admin_step_up_valid(actor),
     )
 
 
@@ -365,8 +436,40 @@ def roles():
 def role_new():
     if not current_user.can(Permission.ADMIN):
         abort(403)
+    actor = current_user._get_current_object()
     form = RoleForm()
     if form.validate_on_submit():
+        admin_password = (
+            form.admin_password.data
+            or request.form.get("admin_password")
+            or request.form.get("password")
+        )
+        admin_otp = (
+            getattr(form, "admin_otp", None)
+            and form.admin_otp.data
+            or request.form.get("admin_otp")
+            or request.form.get("otp")
+        )
+        if admin_password:
+            if not verify_admin_step_up(admin_password, actor, otp=admin_otp):
+                flash(
+                    "Administrator verification failed: incorrect password or two-factor authentication code.",
+                    "error",
+                )
+                return (
+                    render_template(
+                        "admin/role_form.html",
+                        form=form,
+                        title="New Role",
+                        role=None,
+                        is_step_up_valid=False,
+                    ),
+                    401,
+                )
+        elif not is_admin_step_up_valid(actor):
+            flash("Administrator password re-authentication required for this operation.", "error")
+            return redirect(url_for("admin.step_up", next=request.url))
+
         name = form.name.data.strip()
         if Role.query.filter_by(name=name).first() is not None:
             flash(f"Role '{name}' already exists.", "error")
@@ -377,7 +480,7 @@ def role_new():
         db.session.add(role)
         record_audit(
             Event.ROLE_CREATED,
-            actor=current_user._get_current_object(),
+            actor=actor,
             target_type="role",
             target_label=name,
             detail={"permissions": form.permission_names()},
@@ -386,7 +489,13 @@ def role_new():
         db.session.commit()
         flash(f"Role '{name}' created.", "success")
         return redirect(url_for("admin.roles"))
-    return render_template("admin/role_form.html", form=form, title="New Role", role=None)
+    return render_template(
+        "admin/role_form.html",
+        form=form,
+        title="New Role",
+        role=None,
+        is_step_up_valid=is_admin_step_up_valid(actor),
+    )
 
 
 @admin.route("/roles/<int:id>/edit", methods=["GET", "POST"])
@@ -394,9 +503,41 @@ def role_new():
 def role_edit(id):
     if not current_user.can(Permission.ADMIN):
         abort(403)
+    actor = current_user._get_current_object()
     role = db.get_or_404(Role, id)
     form = RoleForm()
     if form.validate_on_submit():
+        admin_password = (
+            form.admin_password.data
+            or request.form.get("admin_password")
+            or request.form.get("password")
+        )
+        admin_otp = (
+            getattr(form, "admin_otp", None)
+            and form.admin_otp.data
+            or request.form.get("admin_otp")
+            or request.form.get("otp")
+        )
+        if admin_password:
+            if not verify_admin_step_up(admin_password, actor, otp=admin_otp):
+                flash(
+                    "Administrator verification failed: incorrect password or two-factor authentication code.",
+                    "error",
+                )
+                return (
+                    render_template(
+                        "admin/role_form.html",
+                        form=form,
+                        title="Edit Role",
+                        role=role,
+                        is_step_up_valid=False,
+                    ),
+                    401,
+                )
+        elif not is_admin_step_up_valid(actor):
+            flash("Administrator password re-authentication required for this operation.", "error")
+            return redirect(url_for("admin.step_up", next=request.url))
+
         new_name = form.name.data.strip()
         if role.is_builtin and new_name != role.name:
             flash("Built-in roles cannot be renamed.", "error")
@@ -424,7 +565,7 @@ def role_edit(id):
         db.session.add(role)
         record_audit(
             Event.ROLE_UPDATED,
-            actor=current_user._get_current_object(),
+            actor=actor,
             target_type="role",
             target_id=role.id,
             target_label=role.name,
@@ -437,7 +578,13 @@ def role_edit(id):
     elif request.method == "GET":
         form.name.data = role.name
         form.load_permissions(role.permissions)
-    return render_template("admin/role_form.html", form=form, title="Edit Role", role=role)
+    return render_template(
+        "admin/role_form.html",
+        form=form,
+        title="Edit Role",
+        role=role,
+        is_step_up_valid=is_admin_step_up_valid(actor),
+    )
 
 
 @admin.route("/roles/<int:id>/delete", methods=["POST"])
@@ -445,6 +592,20 @@ def role_edit(id):
 def role_delete(id):
     if not current_user.can(Permission.ADMIN):
         abort(403)
+    actor = current_user._get_current_object()
+    admin_password = request.form.get("admin_password") or request.form.get("password")
+    admin_otp = request.form.get("admin_otp") or request.form.get("otp")
+    if admin_password:
+        if not verify_admin_step_up(admin_password, actor, otp=admin_otp):
+            flash(
+                "Administrator verification failed: incorrect password or two-factor authentication code.",
+                "error",
+            )
+            return redirect(url_for("admin.roles"))
+    elif not is_admin_step_up_valid(actor):
+        flash("Administrator password re-authentication required for this operation.", "error")
+        return redirect(url_for("admin.step_up", next=url_for("admin.roles")))
+
     role = db.get_or_404(Role, id)
     if role.is_builtin:
         flash("Built-in roles cannot be deleted.", "error")
@@ -457,7 +618,7 @@ def role_delete(id):
         db.session.delete(role)
         record_audit(
             Event.ROLE_DELETED,
-            actor=current_user._get_current_object(),
+            actor=actor,
             target_type="role",
             target_label=name,
             commit=False,

@@ -13,8 +13,8 @@
     <div class="panel panel-default">
       <div class="panel-heading">Step 1 &mdash; Scan or enter the key</div>
       <div class="panel-body text-center">
-        <img src="{{ qr_data_uri }}" alt="TOTP QR code" style="max-width: 220px; image-rendering: pixelated;">
-        <p class="text-muted" style="word-break: break-all; margin-top: 10px;">
+        <img src="{{ qr_data_uri }}" alt="TOTP QR code" class="mfa-qr-code">
+        <p class="text-muted word-break-all mt-10">
           Manual key: <code>{{ secret }}</code>
         </p>
         <p class="text-muted">
@@ -29,7 +29,7 @@
       <div class="panel-heading">Step 2 &mdash; Verify the code</div>
       <div class="panel-body">
         {{ wtf.quick_form(form, button_map={"submit": "primary"}) }}
-        <p class="text-muted" style="margin-top: 10px;">
+        <p class="text-muted mt-10">
           Two-factor authentication stays disabled until you enter a valid code.
         </p>
       </div>

@@ -1892,3 +1892,207 @@ a.btn-danger:focus {
   display: inline;
   margin: 0;
 }
+
+/* ==========================================================================
+   Utility Classes (Replacing Inline Styles for Strict CSP Compliance)
+   ========================================================================== */
+
+.d-inline {
+  display: inline !important;
+}
+
+.d-inline-block {
+  display: inline-block !important;
+}
+
+.w-100 {
+  width: 100% !important;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.mb-0 {
+  margin-bottom: 0 !important;
+}
+
+.mb-5 {
+  margin-bottom: 5px !important;
+}
+
+.mb-8 {
+  margin-bottom: 8px !important;
+}
+
+.mb-10 {
+  margin-bottom: 10px !important;
+}
+
+.mb-15 {
+  margin-bottom: 15px !important;
+}
+
+.mt-0 {
+  margin-top: 0 !important;
+}
+
+.mt-4 {
+  margin-top: 4px !important;
+}
+
+.mt-5 {
+  margin-top: 5px !important;
+}
+
+.mt-10 {
+  margin-top: 10px !important;
+}
+
+.mt-15 {
+  margin-top: 15px !important;
+}
+
+.mt-24 {
+  margin-top: 24px !important;
+}
+
+.font-size-11 {
+  font-size: 11px !important;
+}
+
+.font-size-12 {
+  font-size: 12px !important;
+}
+
+.font-size-14 {
+  font-size: 14px !important;
+}
+
+.word-break-all {
+  word-break: break-all;
+}
+
+.line-height-1-6 {
+  line-height: 1.6;
+}
+
+.text-danger-semibold {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.mfa-qr-code {
+  max-width: 220px;
+  image-rendering: pixelated;
+}
+
+.btn-unstyled-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+}
+
+/* ==========================================================================
+   Utility Classes (Replacing Inline Styles for Strict CSP Compliance)
+   ========================================================================== */
+
+.d-inline {
+  display: inline !important;
+}
+
+.d-inline-block {
+  display: inline-block !important;
+}
+
+.w-100 {
+  width: 100% !important;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.mb-0 {
+  margin-bottom: 0 !important;
+}
+
+.mb-5 {
+  margin-bottom: 5px !important;
+}
+
+.mb-8 {
+  margin-bottom: 8px !important;
+}
+
+.mb-10 {
+  margin-bottom: 10px !important;
+}
+
+.mb-15 {
+  margin-bottom: 15px !important;
+}
+
+.mt-0 {
+  margin-top: 0 !important;
+}
+
+.mt-4 {
+  margin-top: 4px !important;
+}
+
+.mt-5 {
+  margin-top: 5px !important;
+}
+
+.mt-10 {
+  margin-top: 10px !important;
+}
+
+.mt-15 {
+  margin-top: 15px !important;
+}
+
+.mt-24 {
+  margin-top: 24px !important;
+}
+
+.font-size-11 {
+  font-size: 11px !important;
+}
+
+.font-size-12 {
+  font-size: 12px !important;
+}
+
+.font-size-14 {
+  font-size: 14px !important;
+}
+
+.word-break-all {
+  word-break: break-all;
+}
+
+.line-height-1-6 {
+  line-height: 1.6;
+}
+
+.text-danger-semibold {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.mfa-qr-code {
+  max-width: 220px;
+  image-rendering: pixelated;
+}
+
+.btn-unstyled-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+}

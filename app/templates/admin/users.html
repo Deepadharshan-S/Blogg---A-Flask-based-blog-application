@@ -11,7 +11,7 @@
 {% set active = 'users' %}
 {% include 'admin/_nav.html' %}
 
-<form class="form-inline" method="get" action="{{ url_for('admin.users') }}" style="margin-bottom: 15px;">
+<form class="form-inline mb-15" method="get" action="{{ url_for('admin.users') }}">
   <div class="form-group">
     <input type="text" class="form-control" name="q" placeholder="Search email / username / name"
            value="{{ request.args.get('q', '') }}">
@@ -27,7 +27,7 @@
 </form>
 
 <div class="panel panel-default">
-  <table class="table table-striped" style="margin-bottom: 0;">
+  <table class="table table-striped mb-0">
     <thead>
       <tr>
         <th>User</th>

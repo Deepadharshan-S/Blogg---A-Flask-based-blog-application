@@ -130,15 +130,16 @@ sequenceDiagram
 Permissions are computed using bitmask arithmetic:
 ```python
 class Permission:
-    FOLLOW = 1          # 0b0000001
-    COMMENT = 2         # 0b0000010
-    WRITE = 4           # 0b0000100
-    MODERATE = 8        # 0b0001000
-    ADMIN = 16          # 0b0010000
-    MANAGE_USERS = 32   # 0b0100000
-    VIEW_AUDIT = 64     # 0b1000000
+    FOLLOW = 1  # 0b0000001
+    COMMENT = 2  # 0b0000010
+    WRITE = 4  # 0b0000100
+    MODERATE = 8  # 0b0001000
+    ADMIN = 16  # 0b0010000
+    MANAGE_USERS = 32  # 0b0100000
+    VIEW_AUDIT = 64  # 0b1000000
 ```
 - **Administrative Guardrails**:
+  - **Administrative Step-Up Authentication (BLOGG-SEC-018 & SEC-ASSESS-003)**: High-impact console operations (account tombstoning, user role modifications, and custom role creation/deletion/modification) require the authenticated administrator to re-verify their identity. For administrators with MFA enabled, step-up requires both the account password and a valid TOTP/backup code challenge; administrators without MFA supply their password. Verification establishes a short-lived elevated state (`BLOGG_ADMIN_STEP_UP_TIMEOUT`, default 5 minutes) strictly scoped to the administrator and their session JTI. Passwords and OTP codes belonging to target users are rejected. All step-up challenges record dedicated audit events (`admin.step_up.success`, `admin.step_up.failed`).
   - **Last Active Administrator Protection**: The system counts *active* administrators (`active_administrator_count()`). An admin cannot be demoted, disabled, deleted, or self-deleted if they are the last active administrator.
   - **Role Integrity**: Roles holding users cannot be deleted. Built-in roles cannot be deleted or renamed. The `ADMIN` permission cannot be removed from a role if that role contains the last active administrators.
   - **Privilege Escalation Prevention**: Operators with the `MANAGE_USERS` permission cannot assign the `Administrator` role or grant `ADMIN` permissions—only accounts carrying `Permission.ADMIN` can elevate users to administrator status.
@@ -174,7 +175,7 @@ API tokens (`ApiToken`) are random 64-hex character strings (256 bits of entropy
 | :--- | :---: | :--- |
 | **Session Hijacking** | High | `HttpOnly` and `SameSite=Lax` on all cookies; `Secure` flag enabled by default in production. Server-side session validation with idle and absolute TTLs. |
 | **Cross-Site Request Forgery (CSRF)** | High | Global `CSRFProtect` across all browser routes; state-changing actions (logout, likes, follows, moderation) strictly use POST with CSRF tokens. Stateless REST API is CSRF-exempt. |
-| **Cross-Site Scripting (XSS)** | High | Bleach HTML sanitization on Markdown input with strict tag whitelisting; auto-escaping in Jinja2 templates; strict `Content-Security-Policy` header. |
+| **Cross-Site Scripting (XSS)** | High | Bleach HTML sanitization on Markdown input with strict tag whitelisting; auto-escaping in Jinja2 templates; hardened `Content-Security-Policy` with cryptographically secure, per-request nonces (`nonce-<random>`) on `script-src` and `style-src` (zero `'unsafe-inline'` or `'unsafe-eval'`). |
 | **Open Redirects** | High | `is_safe_url()` parses targets using `urllib.parse.urlsplit`, rejecting protocol-relative URLs (`//`, `/\\`), backslashes, absolute schemes, and foreign network locations. |
 | **Credential Stuffing & Brute-Force** | High | Rate limiting via Flask-Limiter (`5 per minute` on login/MFA); automatic account lockout after `BLOGG_MAX_FAILED_LOGINS` failures; uniform failure responses. |
 | **Clickjacking** | Medium | `X-Frame-Options: SAMEORIGIN` and CSP `frame-ancestors 'self'` applied to all HTTP responses. |
@@ -273,9 +274,17 @@ All IAM settings default sensibly if omitted:
 | `BLOGG_PASSWORD_HISTORY_COUNT` | `5` | Number of previous password hashes archived to prevent reuse. |
 | `BLOGG_PASSWORD_MAX_AGE_DAYS` | `0` | Password maximum age in days (`0` = password never expires). |
 | `BLOGG_MFA_ISSUER` | `Blogg` | Issuer label displayed in authenticator apps. |
+| `BLOGG_MFA_ENCRYPTION_KEY` | *None* | Dedicated Fernet key(s) for authenticated encryption of TOTP secrets at rest. Required in production; in development, automatically generated and persisted to `instance/.dev_mfa_key` if omitted so dev databases survive restarts; accepts comma-separated keys for zero-downtime rotation. |
 | `BLOGG_ENFORCE_MFA_FOR_ADMINS` | `false` | When `true`, enforces MFA enrollment for all administrators. |
+| `BLOGG_ADMIN_STEP_UP_TIMEOUT` | `300` | Lifetime in seconds for elevated administrator step-up authorization (5 minutes). Re-authentication requires password (plus TOTP challenge for MFA-enabled administrators). |
+| `BLOGG_EMAIL_MAX_WORKERS` | `4` | Maximum background worker threads for asynchronous email delivery. |
+| `BLOGG_EMAIL_QUEUE_CAPACITY` | `50` | Maximum bounded task queue depth before gracefully dropping emails under load (mitigates DoS). |
 | `BLOGG_LOGIN_RATE_LIMIT` | `5 per minute` | Rate limit applied to login and MFA verification routes. |
-| `RATELIMIT_STORAGE_URI` | `memory://` | Storage backend for rate limiting (`filesystem://` in production, or Redis). |
+| `RATELIMIT_STORAGE_URI` | `memory://` | Storage backend for rate limiting: `memory://` (dev/test) or `redis://[:password@]host[:port][/db]` (production multi-worker clusters). |
+| `RATELIMIT_SWALLOW_ERRORS` | `true` | When `true`, handles Redis outages safely via degraded local fallback rather than crashing with HTTP 500 errors. |
+| `RATELIMIT_IN_MEMORY_FALLBACK_ENABLED` | `true` | When `true`, activates per-process in-memory rate limiting when the central Redis server is unreachable. |
+| `BLOGG_REDIS_CONNECT_TIMEOUT` | `1.5` | Connection timeout in seconds for Redis backend queries. |
+| `BLOGG_REDIS_SOCKET_TIMEOUT` | `1.5` | Socket read/write timeout in seconds for Redis backend queries. |
 | `BLOGG_NUM_PROXIES` | `0` | Number of upstream reverse proxies for `ProxyFix` trusted IP calculation. |
 | `BLOGG_ACCESS_LOG_ENABLED` | `true` | When `true`, records every HTTP request into `access_logs`. |
 | `BLOGG_ACCESS_LOG_EXCLUDE_PREFIXES` | `/static` | Comma-separated path prefixes excluded from access logging. |
@@ -392,12 +401,19 @@ uv run flask lint
 uv run flask lint-fix
 ```
 
-### 3. Log Pruning Maintenance
-Clean up access records and audit events older than their configured retention windows:
-
-```bash
-uv run flask prune-logs
-```
+### 3. Maintenance & Cryptographic Operations
+- **Prune Expired Logs**: Clean up access records and audit events older than their configured retention windows:
+  ```bash
+  uv run flask prune-logs
+  ```
+- **Migrate Legacy Plaintext MFA Secrets**: Encrypt any legacy unencrypted Base32 TOTP secrets at rest:
+  ```bash
+  uv run flask migrate-mfa-secrets
+  ```
+- **Rotate MFA Encryption Keys**: Zero-downtime re-encryption of all TOTP secrets with a new primary Fernet key:
+  ```bash
+  uv run flask rotate-mfa-keys
+  ```
 
 ---
 
@@ -410,16 +426,17 @@ Blogg/
 │   ├── api/                   # Headless REST API v1 (auth, posts, tokens, admin)
 │   ├── auth/                  # Authentication blueprint (login, MFA, security center)
 │   ├── main/                  # Core blog features (posts, comments, profiles, search)
-│   ├── cli.py                 # Application CLI commands (prune-logs)
+│   ├── cli.py                 # Application CLI commands (prune-logs, migrate-mfa-secrets, rotate-mfa-keys)
+│   ├── crypto.py              # Cryptographic helpers (Fernet/MultiFernet TOTP secret encryption at rest)
 │   ├── decorators.py          # RBAC & ownership authorization decorators
-│   ├── email.py               # Asynchronous email delivery utility
+│   ├── email.py               # Bounded asynchronous email delivery queue (DoS mitigation)
 │   ├── fake.py                # Synthetic data generator for development
 │   ├── models.py              # Data models (User, Role, Post, AuditEvent, AccessLog, UserSession, ApiToken)
 │   ├── security.py            # IAM services (authentication, lockout, sessions, tokens, audit trail)
 │   ├── static/                # CSS styling, JavaScript, and assets
 │   └── templates/             # Jinja2 templates (Inter typography + Dark/Light mode)
 ├── migrations/                # Alembic database migration scripts
-├── tests/                     # Automated test suite (212 tests covering IAM, MFA, API, models)
+├── tests/                     # Automated test suite (252 tests covering IAM, MFA encryption, bounded queues, CSP, step-up, API)
 ├── blogg.py                   # Main entry point & Flask CLI command registrations
 ├── config.py                  # Environment configuration classes & IAM defaults
 ├── pyproject.toml             # Project metadata, Ruff rules, and dependencies

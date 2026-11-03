@@ -16,7 +16,7 @@
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
 <link rel="alternate icon" href="{{ url_for('static', filename='favicon.svg') }}">
-<script>
+<script nonce="{{ csp_nonce }}">
   (function() {
     var theme = localStorage.getItem('blogg-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     document.documentElement.setAttribute('data-theme', theme);
@@ -131,7 +131,7 @@
 {% block scripts %}
 {{ super() }}
 {{ moment.include_moment() }}
-<script>
+<script nonce="{{ csp_nonce }}">
   // Theme toggle handler
   (function() {
     var btn = document.getElementById('theme-toggle');

@@ -34,9 +34,22 @@ class BasicsTestCase(unittest.TestCase):
                 create_app("production")
             self.assertIn("SECRET_KEY must be set in production", str(ctx.exception))
 
-        with patch.dict(os.environ, {"SECRET_KEY": "super-secret-prod-key"}):
+        with patch.dict(
+            os.environ,
+            {
+                "SECRET_KEY": "super-secret-prod-key",
+                "BLOGG_MFA_ENCRYPTION_KEY": "YmxvZ2ctdGVzdC1tZmEtZW5jcnlwdGlvbi1rZXktMzI=",
+            },
+        ):
             prod_app = create_app("production")
             self.assertEqual(prod_app.config["SECRET_KEY"], "super-secret-prod-key")
+
+    def test_production_config_mfa_key_guard(self):
+        """Ensure ProductionConfig requires BLOGG_MFA_ENCRYPTION_KEY in environment."""
+        with patch.dict(os.environ, {"SECRET_KEY": "super-secret-prod-key"}, clear=True):
+            with self.assertRaises(RuntimeError) as ctx:
+                create_app("production")
+            self.assertIn("BLOGG_MFA_ENCRYPTION_KEY", str(ctx.exception))
 
     def test_shutdown_route_removed(self):
         """Ensure legacy /shutdown route no longer exists and returns 404."""
@@ -77,7 +90,13 @@ class BasicsTestCase(unittest.TestCase):
 
     def test_production_cookie_security_attributes(self):
         """Ensure ProductionConfig sets Secure, HttpOnly, and SameSite cookie attributes."""
-        with patch.dict(os.environ, {"SECRET_KEY": "super-secret-prod-key"}):
+        with patch.dict(
+            os.environ,
+            {
+                "SECRET_KEY": "super-secret-prod-key",
+                "BLOGG_MFA_ENCRYPTION_KEY": "YmxvZ2ctdGVzdC1tZmEtZW5jcnlwdGlvbi1rZXktMzI=",
+            },
+        ):
             prod_app = create_app("production")
             self.assertTrue(prod_app.config["SESSION_COOKIE_SECURE"])
             self.assertTrue(prod_app.config["SESSION_COOKIE_HTTPONLY"])
@@ -120,7 +139,7 @@ class BasicsTestCase(unittest.TestCase):
         self.assertEqual(res.headers.get("X-XSS-Protection"), "0")
         self.assertEqual(res.headers.get("Referrer-Policy"), "strict-origin-when-cross-origin")
 
-        # Content-Security-Policy
+        # Content-Security-Policy (BLOGG-SEC-014: strictly nonced, no unsafe-inline)
         csp = res.headers.get("Content-Security-Policy", "")
         self.assertIn("default-src 'self'", csp)
         self.assertIn("script-src 'self'", csp)
@@ -128,12 +147,20 @@ class BasicsTestCase(unittest.TestCase):
         self.assertIn("font-src 'self'", csp)
         self.assertIn("img-src 'self'", csp)
         self.assertIn("connect-src 'self'", csp)
+        self.assertIn("'nonce-", csp)
+        self.assertNotIn("'unsafe-inline'", csp)
 
         # HSTS must NOT be emitted in testing or development over HTTP
         self.assertNotIn("Strict-Transport-Security", res.headers)
 
         # HSTS MUST be emitted in production deployments when connection is HTTPS
-        with patch.dict(os.environ, {"SECRET_KEY": "super-secret-prod-key"}):
+        with patch.dict(
+            os.environ,
+            {
+                "SECRET_KEY": "super-secret-prod-key",
+                "BLOGG_MFA_ENCRYPTION_KEY": "YmxvZ2ctdGVzdC1tZmEtZW5jcnlwdGlvbi1rZXktMzI=",
+            },
+        ):
             prod_app = create_app("production")
             prod_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
             with prod_app.app_context():

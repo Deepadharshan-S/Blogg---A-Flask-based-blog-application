@@ -210,7 +210,8 @@ class User(UserMixin, db.Model):
     locked_until = db.Column(db.DateTime())
     failed_login_attempts = db.Column(db.Integer, default=0, nullable=False)
     mfa_enabled = db.Column(db.Boolean, default=False, nullable=False)
-    mfa_secret = db.Column(db.String(64))
+    # IAM (BLOGG-SEC-015): TOTP secret encrypted at rest using Fernet authenticated encryption.
+    _mfa_secret = db.Column("mfa_secret", db.String(255))
     mfa_backup_codes = db.Column(db.Text())  # JSON list of SHA-256 hashes
     password_changed_at = db.Column(db.DateTime())
     last_login_at = db.Column(db.DateTime())
@@ -386,6 +387,23 @@ class User(UserMixin, db.Model):
     # ------------------------------------------------------------------
     # IAM: multi-factor authentication (TOTP + one-time backup codes)
     # ------------------------------------------------------------------
+    @property
+    def mfa_secret(self):
+        """Plaintext TOTP secret, decrypted on read using dedicated Fernet key."""
+        from .crypto import decrypt_mfa_secret
+
+        return decrypt_mfa_secret(self._mfa_secret)
+
+    @mfa_secret.setter
+    def mfa_secret(self, secret):
+        """Encrypt TOTP secret with authenticated encryption before storing."""
+        from .crypto import encrypt_mfa_secret
+
+        if secret is None:
+            self._mfa_secret = None
+        else:
+            self._mfa_secret = encrypt_mfa_secret(secret)
+
     @staticmethod
     def normalize_backup_code(code):
         return (code or "").strip().lower().replace("-", "").replace(" ", "")

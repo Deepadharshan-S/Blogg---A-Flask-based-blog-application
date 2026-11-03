@@ -8,6 +8,7 @@ enforce exactly the same security policy.
 import base64
 import io
 import json
+import time
 import uuid
 from datetime import timedelta, timezone
 
@@ -75,6 +76,8 @@ class Event:
     AUDIT_EXPORTED = "audit.exported"
     ACCESS_LOG_VIEWED = "access_log.viewed"
     LOGS_PRUNED = "logs.pruned"
+    ADMIN_STEP_UP_SUCCESS = "admin.step_up.success"
+    ADMIN_STEP_UP_FAILED = "admin.step_up.failed"
 
 
 # ---------------------------------------------------------------------------
@@ -410,6 +413,19 @@ def authenticate_credentials(email, password, otp=None, source="web", record=Tru
 
 def start_user_session(user, remember=False):
     """Log the user in via Flask-Login and register a server-side session."""
+    # IAM (BLOGG-SEC-013): Prevent session fixation attacks by explicitly
+    # clearing all pre-authentication session data before establishing the
+    # authenticated session. Preserve legitimate operational state:
+    # 1. CSRF session token (Flask-WTF token continuity)
+    # 2. Safe post-login redirect destination if staged
+    saved_next = session.get("next") or session.get("_next")
+    csrf_token = session.get("csrf_token")
+    session.clear()
+    if csrf_token:
+        session["csrf_token"] = csrf_token
+    if saved_next:
+        session["next"] = saved_next
+
     login_user(user, remember=remember)
     jti = str(uuid.uuid4())
     now = utc_now()
@@ -642,3 +658,122 @@ def resolve_bearer_token(token):
     if user is not None and user.active:
         return user, None, None
     return None, None, "invalid"
+
+
+# ---------------------------------------------------------------------------
+# Administrative Step-Up Authentication (BLOGG-SEC-018)
+# ---------------------------------------------------------------------------
+
+
+def is_admin_step_up_valid(user=None, max_age=None):
+    """Return True if the administrator has verified step-up authentication
+    within max_age seconds in the current session.
+    """
+    from flask_login import current_user
+
+    if max_age is None:
+        max_age = current_app.config.get("BLOGG_ADMIN_STEP_UP_TIMEOUT", 300)
+    if user is None:
+        user = current_user._get_current_object() if current_user.is_authenticated else None
+    if not user or not user.is_authenticated:
+        return False
+
+    step_up_user_id = session.get("admin_step_up_user_id")
+    step_up_jti = session.get("admin_step_up_jti")
+    step_up_at = session.get("admin_step_up_at")
+
+    if not step_up_user_id or not step_up_at:
+        return False
+    if step_up_user_id != user.id:
+        return False
+
+    # Tie step-up to the current session JTI
+    current_jti = session.get("session_jti")
+    if current_jti and step_up_jti != current_jti:
+        return False
+
+    try:
+        elapsed = time.time() - float(step_up_at)
+        if elapsed < 0 or elapsed > max_age:
+            return False
+    except (ValueError, TypeError):
+        return False
+
+    return True
+
+
+def mark_admin_step_up_verified(user=None):
+    """Record short-lived step-up authorization in the session."""
+    from flask_login import current_user
+
+    if user is None:
+        user = current_user._get_current_object() if current_user.is_authenticated else None
+    if user and user.is_authenticated:
+        session["admin_step_up_user_id"] = user.id
+        session["admin_step_up_jti"] = session.get("session_jti")
+        session["admin_step_up_at"] = time.time()
+
+
+def clear_admin_step_up():
+    """Invalidate step-up authorization."""
+    session.pop("admin_step_up_user_id", None)
+    session.pop("admin_step_up_jti", None)
+    session.pop("admin_step_up_at", None)
+
+
+def verify_admin_step_up(password, user=None, target_user=None, otp=None):
+    """Verify the authenticated administrator's credentials for step-up (SEC-ASSESS-003).
+
+    Strictly verifies against the currently authenticated administrator,
+    NEVER against the target user.
+
+    If the administrator has MFA enabled, both password and a valid
+    TOTP / backup code are required.
+    """
+    from flask_login import current_user
+
+    if user is None:
+        user = current_user._get_current_object() if current_user.is_authenticated else None
+    if not user or not user.is_authenticated:
+        return False
+    if not password:
+        return False
+
+    # 1. Verify password against current authenticated administrator
+    if not user.verify_password(password):
+        record_audit(
+            Event.ADMIN_STEP_UP_FAILED,
+            actor=user,
+            target_type="user" if target_user else None,
+            target_id=target_user.id if target_user else None,
+            target_label=target_user.email if target_user else None,
+            detail={"reason": "incorrect_password"},
+            success=False,
+        )
+        return False
+
+    # 2. If administrator has MFA enabled, verify TOTP / backup code
+    if user.mfa_enabled:
+        if not otp or not user.verify_mfa_code(otp):
+            record_audit(
+                Event.ADMIN_STEP_UP_FAILED,
+                actor=user,
+                target_type="user" if target_user else None,
+                target_id=target_user.id if target_user else None,
+                target_label=target_user.email if target_user else None,
+                detail={"reason": "incorrect_totp"},
+                success=False,
+            )
+            return False
+
+    mark_admin_step_up_verified(user)
+    record_audit(
+        Event.ADMIN_STEP_UP_SUCCESS,
+        actor=user,
+        target_type="user" if target_user else None,
+        target_id=target_user.id if target_user else None,
+        target_label=target_user.email if target_user else None,
+        detail={"mfa_verified": bool(user.mfa_enabled)},
+        success=True,
+    )
+    return True

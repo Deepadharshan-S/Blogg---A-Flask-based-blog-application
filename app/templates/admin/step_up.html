@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}Blogg - Administrative Step-Up Authentication{% endblock %}
+
+{% block page_content %}
+<div class="row">
+  <div class="col-md-6 col-md-offset-3">
+    <div class="page-header text-center">
+      <h1>Elevated Verification Required</h1>
+    </div>
+
+    <div class="panel panel-warning">
+      <div class="panel-heading">
+        <h3 class="panel-title">Administrative Step-Up Authentication</h3>
+      </div>
+      <div class="panel-body">
+        <p class="text-muted mb-15">
+          The requested operation involves sensitive administrative privileges. Please re-authenticate
+          with your administrator password to continue.
+        </p>
+
+        <form method="post" action="{{ url_for('admin.step_up', next=next_url) }}">
+          {{ form.hidden_tag() }}
+          <div class="form-group {% if form.password.errors %}has-error{% endif %}">
+            {{ form.password.label(class_="control-label") }}
+            {{ form.password(class_="form-control", placeholder="Confirm administrator password", autofocus=True, autocomplete="current-password") }}
+            {% for error in form.password.errors %}
+            <span class="help-block">{{ error }}</span>
+            {% endfor %}
+          </div>
+          {% if current_user.mfa_enabled %}
+          <div class="form-group {% if form.otp.errors %}has-error{% endif %}">
+            {{ form.otp.label(class_="control-label") }}
+            {{ form.otp(class_="form-control", placeholder="6-digit TOTP code or backup code", autocomplete="one-time-code") }}
+            {% for error in form.otp.errors %}
+            <span class="help-block">{{ error }}</span>
+            {% endfor %}
+            <span class="help-block text-muted">Two-factor authentication is active on your administrator account. Enter your current authenticator code.</span>
+          </div>
+          {% endif %}
+          <button type="submit" class="btn btn-primary btn-block">Confirm Administrative Access</button>
+          <a href="{{ next_url or url_for('admin.dashboard') }}" class="btn btn-default btn-block mt-10">Cancel</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

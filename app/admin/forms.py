@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import BooleanField, SelectField, StringField, SubmitField
+from wtforms import BooleanField, PasswordField, SelectField, StringField, SubmitField
 from wtforms.validators import DataRequired, Length
 
 from ..models import Permission
@@ -14,6 +14,8 @@ class RoleForm(FlaskForm):
     admin = BooleanField("ADMIN — full administrative access")
     manage_users = BooleanField("MANAGE_USERS — manage accounts in the admin console")
     view_audit = BooleanField("VIEW_AUDIT — read the security audit log")
+    admin_password = PasswordField("Administrator Password")
+    admin_otp = StringField("Administrator MFA Code")
     submit = SubmitField("Save Role")
 
     def permission_names(self):
@@ -46,3 +48,9 @@ class UserFilterForm(FlaskForm):
             ("unconfirmed", "Unconfirmed"),
         ],
     )
+
+
+class StepUpForm(FlaskForm):
+    password = PasswordField("Administrator Password", validators=[DataRequired()])
+    otp = StringField("One-Time Passcode (TOTP)")
+    submit = SubmitField("Confirm Identity")

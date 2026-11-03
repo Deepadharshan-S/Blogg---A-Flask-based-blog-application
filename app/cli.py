@@ -28,3 +28,66 @@ def register_cli_commands(app):
             f"Retention: audit={app.config['BLOGG_AUDIT_RETENTION_DAYS']}d, "
             f"access={app.config['BLOGG_ACCESS_LOG_RETENTION_DAYS']}d (0 = keep forever)"
         )
+
+    @app.cli.command("migrate-mfa-secrets")
+    def migrate_mfa_secrets_command():
+        """Encrypt existing unencrypted TOTP/MFA secrets at rest.
+
+        Scans users with plaintext secrets and encrypts them using the configured
+        BLOGG_MFA_ENCRYPTION_KEY. Safe to run multiple times (idempotent).
+        """
+        from . import db
+        from .crypto import encrypt_mfa_secret, is_encrypted_secret
+        from .models import User
+
+        users = User.query.filter(User._mfa_secret.isnot(None)).all()
+        migrated = 0
+        skipped = 0
+
+        for user in users:
+            raw_secret = user._mfa_secret
+            if raw_secret and not is_encrypted_secret(raw_secret):
+                user._mfa_secret = encrypt_mfa_secret(raw_secret)
+                db.session.add(user)
+                migrated += 1
+            else:
+                skipped += 1
+
+        db.session.commit()
+        click.echo(
+            f"MFA secret migration complete: {migrated} secret(s) encrypted, "
+            f"{skipped} already encrypted/empty."
+        )
+
+    @app.cli.command("rotate-mfa-keys")
+    def rotate_mfa_keys_command():
+        """Re-encrypt all MFA secrets with the primary key.
+
+        When rotating keys, configure BLOGG_MFA_ENCRYPTION_KEY="<new_primary_key>,<old_key>"
+        and run this command to re-encrypt all stored secrets with the new primary key.
+        """
+        from . import db
+        from .crypto import is_encrypted_secret, rotate_mfa_secret
+        from .models import User
+
+        users = User.query.filter(User._mfa_secret.isnot(None)).all()
+        rotated = 0
+        skipped = 0
+
+        for user in users:
+            raw_secret = user._mfa_secret
+            if raw_secret and is_encrypted_secret(raw_secret):
+                new_ciphertext = rotate_mfa_secret(raw_secret)
+                if new_ciphertext != raw_secret:
+                    user._mfa_secret = new_ciphertext
+                    db.session.add(user)
+                    rotated += 1
+                else:
+                    skipped += 1
+            else:
+                skipped += 1
+
+        db.session.commit()
+        click.echo(
+            f"MFA secret rotation complete: {rotated} secret(s) re-encrypted, {skipped} skipped."
+        )

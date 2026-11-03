@@ -111,16 +111,39 @@ class IAMTestCase(unittest.TestCase):
     def admin_role(self):
         return Role.query.filter_by(name="Administrator").first()
 
-    def login(self, email="user@example.com", password="Password123!", client=None):
-        return self.post_form(
+    def login(self, email="user@example.com", password="Password123!", otp=None, client=None):
+        res = self.post_form(
             "/auth/login",
             {"email": email, "password": password},
             page="/auth/login",
             client=client,
             follow_redirects=True,
         )
+        if otp is not None:
+            res = self.post_form(
+                "/auth/mfa",
+                {"code": otp},
+                page="/auth/mfa",
+                client=client,
+                follow_redirects=True,
+            )
+        return res
 
     def logout(self, client=None):
         """Sign out via the CSRF-protected POST endpoint (logout is POST-only)."""
         client = client or self.client
         return self.post_form("/auth/logout", {}, page="/", client=client, follow_redirects=True)
+
+    def step_up_admin(self, password="Password123!", otp=None, client=None):
+        """Authenticate administrator step-up elevation."""
+        client = client or self.client
+        data = {"password": password}
+        if otp is not None:
+            data["otp"] = otp
+        return self.post_form(
+            "/admin/step-up",
+            data,
+            page="/admin/step-up",
+            client=client,
+            follow_redirects=True,
+        )

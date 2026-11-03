@@ -1,10 +1,12 @@
 import logging
 import os
+import secrets
 import sqlite3
 import time
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, g, request
+import flask_moment
+from flask import Flask, g, has_request_context, request
 from flask_bootstrap import Bootstrap
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -14,6 +16,7 @@ from flask_moment import Moment
 from flask_pagedown import PageDown
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
+from markupsafe import Markup
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 
@@ -31,8 +34,24 @@ csrf = CSRFProtect()
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["500 per day", "100 per hour"],
-    storage_uri=os.environ.get("RATELIMIT_STORAGE_URI", "memory://"),
 )
+
+# Patch flask_moment.moment.include_moment to attach CSP nonce to its inline script
+_orig_moment_include = flask_moment.moment.include_moment.__func__
+
+
+@classmethod
+def _nonce_aware_include_moment(cls, *args, **kwargs):
+    rendered = str(_orig_moment_include(cls, *args, **kwargs))
+    nonce = kwargs.get("nonce")
+    if not nonce and has_request_context():
+        nonce = getattr(g, "csp_nonce", None)
+    if nonce:
+        rendered = rendered.replace("<script>", f'<script nonce="{nonce}">')
+    return Markup(rendered)
+
+
+flask_moment.moment.include_moment = _nonce_aware_include_moment
 
 
 @event.listens_for(Engine, "connect")
@@ -56,6 +75,18 @@ def create_app(config_name):
     login_manager.init_app(app)
     pagedown.init_app(app)
     csrf.init_app(app)
+
+    # Distributed Rate Limiting (BLOGG-SEC-017):
+    # Dynamically bind error handling and in-memory degradation settings per app instance
+    limiter._swallow_errors = bool(app.config.get("RATELIMIT_SWALLOW_ERRORS", True))
+    limiter._in_memory_fallback_enabled = bool(
+        app.config.get("RATELIMIT_IN_MEMORY_FALLBACK_ENABLED", True)
+    )
+    if "RATELIMIT_STORAGE_OPTIONS" not in app.config:
+        app.config["RATELIMIT_STORAGE_OPTIONS"] = {
+            "socket_connect_timeout": float(os.environ.get("BLOGG_REDIS_CONNECT_TIMEOUT", "1.5")),
+            "socket_timeout": float(os.environ.get("BLOGG_REDIS_SOCKET_TIMEOUT", "1.5")),
+        }
     limiter.init_app(app)
 
     # Register blueprints
@@ -80,6 +111,17 @@ def create_app(config_name):
     from .cli import register_cli_commands
 
     register_cli_commands(app)
+
+    # Per-request cryptographically secure CSP Nonce generation
+    @app.before_request
+    def set_csp_nonce():
+        g.csp_nonce = secrets.token_urlsafe(16)
+
+    @app.context_processor
+    def inject_csp_nonce():
+        if not hasattr(g, "csp_nonce"):
+            g.csp_nonce = secrets.token_urlsafe(16)
+        return {"csp_nonce": g.csp_nonce}
 
     # Configure ProxyFix only if BLOGG_NUM_PROXIES is explicitly configured to > 0
     try:
@@ -108,13 +150,18 @@ def create_app(config_name):
         response.headers["X-XSS-Protection"] = "0"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
-        # Content-Security-Policy tailored to Blogg frontend assets and integrations
+        # Content-Security-Policy with cryptographic nonce (BLOGG-SEC-014)
+        nonce = getattr(g, "csp_nonce", None)
+        if not nonce:
+            nonce = secrets.token_urlsafe(16)
+            g.csp_nonce = nonce
+
         csp_directives = [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net http://cdn.jsdelivr.net",
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com http://fonts.googleapis.com https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net http://cdn.jsdelivr.net",
-            "font-src 'self' https://fonts.gstatic.com http://fonts.gstatic.com data:",
-            "img-src 'self' data: https://*.gravatar.com http://*.gravatar.com https://secure.gravatar.com http://secure.gravatar.com https://www.gravatar.com http://www.gravatar.com",
+            f"script-src 'self' 'nonce-{nonce}' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
+            f"style-src 'self' 'nonce-{nonce}' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
+            "font-src 'self' https://fonts.gstatic.com data:",
+            "img-src 'self' data: https://*.gravatar.com https://secure.gravatar.com https://www.gravatar.com",
             "connect-src 'self'",
             "frame-ancestors 'self'",
             "form-action 'self'",

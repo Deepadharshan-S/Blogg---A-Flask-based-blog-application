@@ -33,7 +33,7 @@ class PrivilegeEscalationTestCase(IAMTestCase):
         self.login(email=self.ops.email)
         response = self.post_form(
             f"/admin/users/{self.target.id}",
-            {"action": "role", "role_id": admin_role.id},
+            {"action": "role", "role_id": admin_role.id, "admin_password": "Password123!"},
             page=f"/admin/users/{self.target.id}",
             follow_redirects=True,
         )
@@ -49,7 +49,7 @@ class PrivilegeEscalationTestCase(IAMTestCase):
         self.login(email=self.admin.email)
         response = self.post_form(
             f"/admin/users/{self.target.id}",
-            {"action": "role", "role_id": admin_role.id},
+            {"action": "role", "role_id": admin_role.id, "admin_password": "Password123!"},
             page=f"/admin/users/{self.target.id}",
             follow_redirects=True,
         )
@@ -98,7 +98,11 @@ class LastAdminArithmeticTestCase(IAMTestCase):
         self.login(email=self.ops.email)
         response = self.post_form(
             f"/admin/users/{self.admin.id}",
-            {"action": "role", "role_id": Role.query.filter_by(name="User").first().id},
+            {
+                "action": "role",
+                "role_id": Role.query.filter_by(name="User").first().id,
+                "admin_password": "Password123!",
+            },
             page=f"/admin/users/{self.admin.id}",
             follow_redirects=True,
         )
@@ -113,7 +117,7 @@ class LastAdminArithmeticTestCase(IAMTestCase):
         self.login(email=self.admin.email)
         response = self.post_form(
             f"/admin/users/{self.disabled_admin.id}",
-            {"action": "role", "role_id": user_role.id},
+            {"action": "role", "role_id": user_role.id, "admin_password": "Password123!"},
             page=f"/admin/users/{self.disabled_admin.id}",
             follow_redirects=True,
         )
@@ -141,7 +145,12 @@ class LastAdminArithmeticTestCase(IAMTestCase):
             f"/admin/roles/{ops_admin_role.id}/edit",
             # RoleForm uses per-permission boolean checkboxes; omitting
             # `admin` is what strips the ADMIN permission.
-            {"name": "OpsAdmin", "manage_users": "y", "view_audit": "y"},
+            {
+                "name": "OpsAdmin",
+                "manage_users": "y",
+                "view_audit": "y",
+                "admin_password": "Password123!",
+            },
             page=f"/admin/roles/{ops_admin_role.id}/edit",
             follow_redirects=True,
         )
@@ -156,7 +165,7 @@ class LastAdminArithmeticTestCase(IAMTestCase):
         self.login(email=self.ops.email)
         response = self.post_form(
             f"/admin/users/{self.admin.id}",
-            {"action": "delete_user"},
+            {"action": "delete_user", "admin_password": "Password123!"},
             page=f"/admin/users/{self.admin.id}",
             follow_redirects=True,
         )
