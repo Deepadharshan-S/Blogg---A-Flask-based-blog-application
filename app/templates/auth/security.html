@@ -9,10 +9,10 @@
 </div>
 
 {% if backup_codes %}
-<div class="alert alert-danger">
+<div class="alert alert-danger backup-codes-alert">
   <strong>Save your backup codes now</strong> &mdash; they are shown only once and can be used
   if you lose your authenticator device.
-  <ul style="margin-top: 8px; margin-bottom: 0; columns: 2;">
+  <ul class="backup-codes-list">
     {% for code in backup_codes %}
     <li><code>{{ code }}</code></li>
     {% endfor %}
@@ -30,13 +30,27 @@
           <span class="label label-success">Enabled</span>
           Your account requires an authenticator code at login.
         </p>
-        <div class="text-muted" style="margin-bottom: 10px;">
-          Password last changed:
-          {% if current_user.password_changed_at %}
-          {{ moment(current_user.password_changed_at).fromNow() }}
-          {% else %}unknown{% endif %}
+        {{ wtf.quick_form(
+          mfa_form,
+          action=url_for("auth.mfa_disable"),
+          button_map={"submit": "danger btn-sm"}
+        ) }}
+        <div class="mfa-secondary-actions">
+          <form
+            action="{{ url_for('auth.mfa_regenerate_backup_codes') }}"
+            method="post"
+            onsubmit="return confirm('Generate new backup codes? Your current backup codes will stop working.');"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-default btn-sm" type="submit">
+              Regenerate backup codes
+            </button>
+          </form>
+          <p class="text-muted">
+            Misplaced your backup codes? Issue a fresh set &mdash; the old ones
+            stop working immediately.
+          </p>
         </div>
-        {{ wtf.quick_form(mfa_form, button_map={"submit": "danger btn-sm"}) }}
         {% else %}
         <p>
           <span class="label label-default">Disabled</span>
@@ -54,65 +68,71 @@
       <div class="panel-body">
         <p><a href="{{ url_for('auth.change_password') }}">Change password</a></p>
         <p><a href="{{ url_for('auth.change_email_request') }}">Change email address</a></p>
+        <div class="text-muted credentials-meta">
+          Password last changed:
+          {% if current_user.password_changed_at %}
+          {{ moment(current_user.password_changed_at).fromNow() }}
+          {% else %}unknown{% endif %}
+        </div>
       </div>
     </div>
   </div>
 
   <div class="col-md-6">
     <div class="panel panel-default">
-      <div class="panel-heading">
-        Active Sessions &amp; Devices
-        <form
-          class="pull-right"
-          style="display: inline;"
-          action="{{ url_for('auth.session_revoke_others') }}"
-          method="post"
-        >
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-xs btn-default" type="submit">Sign out other devices</button>
-        </form>
-        <form
-          class="pull-right"
-          style="display: inline; margin-right: 6px;"
-          action="{{ url_for('auth.session_revoke_all') }}"
-          method="post"
-          onsubmit="return confirm('Sign out of all devices, including this one?');"
-        >
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-xs btn-danger" type="submit">Sign out everywhere</button>
-        </form>
+      <div class="panel-heading panel-heading-actions">
+        <span class="panel-heading-title">Active Sessions &amp; Devices</span>
+        <span class="panel-heading-buttons">
+          <form
+            class="panel-heading-form"
+            action="{{ url_for('auth.session_revoke_others') }}"
+            method="post"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-default" type="submit">Sign out other devices</button>
+          </form>
+          <form
+            class="panel-heading-form"
+            action="{{ url_for('auth.session_revoke_all') }}"
+            method="post"
+            onsubmit="return confirm('Sign out of all devices, including this one?');"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-danger" type="submit">Sign out everywhere</button>
+          </form>
+        </span>
       </div>
       <div class="panel-body">
         {% if sessions %}
-        <table class="table table-condensed" style="margin-bottom: 0;">
+        <table class="table sessions-table">
           <thead>
             <tr>
               <th>Device</th>
               <th>Last seen</th>
-              <th></th>
+              <th class="sessions-actions-col"></th>
             </tr>
           </thead>
           <tbody>
             {% for s in sessions %}
             <tr>
-              <td>
+              <td class="session-device">
                 {% if s.jti == current_jti %}
                 <span class="label label-primary">This device</span>
                 {% endif %}
-                <div class="text-muted" style="font-size: 12px;">
+                <div class="session-agent" title="{{ s.user_agent or 'Unknown client' }}">
                   {{ s.user_agent or "Unknown client" }}
                 </div>
-                <div class="text-muted" style="font-size: 12px;">IP: {{ s.ip or "?" }}</div>
+                <div class="session-ip">IP: {{ s.ip or "?" }}</div>
               </td>
-              <td>{{ moment(s.last_seen_at).fromNow() }}</td>
-              <td>
+              <td class="session-last-seen">{{ moment(s.last_seen_at).fromNow() }}</td>
+              <td class="sessions-actions-col">
                 <form
                   action="{{ url_for('auth.session_revoke', jti=s.jti) }}"
                   method="post"
-                  style="display: inline;"
+                  class="session-revoke-form"
                 >
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn btn-xs btn-warning" type="submit">Revoke</button>
+                  <button class="btn btn-sm btn-default" type="submit">Revoke</button>
                 </form>
               </td>
             </tr>

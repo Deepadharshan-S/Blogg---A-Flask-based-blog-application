@@ -43,6 +43,7 @@ class Event:
     MFA_FAILED = "auth.mfa.failed"
     MFA_ENABLED = "auth.mfa.enabled"
     MFA_DISABLED = "auth.mfa.disabled"
+    MFA_BACKUP_CODES_REGEN = "auth.mfa.backup_codes_regenerated"
     PASSWORD_CHANGED = "account.password.changed"
     PASSWORD_RESET_REQUESTED = "account.password.reset_requested"
     PASSWORD_RESET_COMPLETED = "account.password.reset_completed"

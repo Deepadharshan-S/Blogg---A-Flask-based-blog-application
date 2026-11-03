@@ -167,7 +167,7 @@ The application will be accessible at `http://127.0.0.1:5000`.
 Every signed-in user has a security center at **`/auth/security`**:
 
 - **Change password** — enforces the password policy and password history; revokes all other sessions on success.
-- **Two-factor authentication** — enrol via QR code (`/auth/security/mfa/setup`), verify a TOTP code to activate, and disable with password + code (`/auth/security/mfa/disable`). Single-use backup codes are shown at enrolment.
+- **Two-factor authentication** — enrol via QR code (`/auth/security/mfa/setup`), verify a TOTP code to activate, and disable with password + code (`/auth/security/mfa/disable`). Single-use backup codes are shown at enrolment and can be regenerated at any time (`POST /auth/security/mfa/backup-codes`, rate-limited), which invalidates the previous set.
 - **Active sessions** — list every device (created, last seen, IP, user agent), revoke one (`/auth/security/sessions/<jti>/revoke`) or sign out everywhere else (`/auth/security/sessions/revoke-others`).
 - **Account deletion** — the danger zone at the bottom tombstones the account (password confirmation required): identity, password and MFA are destroyed, every session and API token is revoked, and posts/comments stay on the site under an anonymous `deleted_<id>` handle. The last Administrator cannot delete themselves.
 

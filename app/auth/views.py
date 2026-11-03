@@ -130,6 +130,16 @@ def mfa():
             remember = bool(session.pop("mfa_remember", False))
             next_url = session.pop("mfa_next", None)
             session.pop("mfa_user_id", None)
+            # The password half of the login already succeeded (it is checked
+            # before the challenge is issued) and the second factor has now
+            # been proven too, so failures from before this login must not
+            # carry over: without this an MFA user who mistyped their password
+            # a few times keeps a stale counter and locks out on the very
+            # next typo. Only a *completed* login clears it - resetting when
+            # the challenge is issued would let an attacker restart the
+            # counter on every password submit and brute-force OTPs.
+            user.reset_login_failures()
+            db.session.add(user)
             start_user_session(user, remember=remember)
             record_audit(Event.MFA_SUCCESS, actor=user, commit=False)
             db.session.commit()
@@ -609,6 +619,34 @@ def mfa_disable():
     )
     db.session.commit()
     flash("Two-factor authentication has been disabled.", "success")
+    return redirect(url_for("auth.security"))
+
+
+@auth.route("/security/mfa/backup-codes", methods=["POST"])
+@login_required
+@limiter.limit("10 per hour")
+def mfa_regenerate_backup_codes():
+    """Issue a fresh set of one-time backup codes (invalidating the old set)."""
+    if not current_user.mfa_enabled:
+        # No-op rather than a fake success: you cannot regenerate codes for a
+        # factor that is switched off.
+        flash("Two-factor authentication is not enabled.", "info")
+        return redirect(url_for("auth.security"))
+    codes = current_user.generate_backup_codes()
+    db.session.add(current_user._get_current_object())
+    record_audit(
+        Event.MFA_BACKUP_CODES_REGEN,
+        actor=current_user._get_current_object(),
+        commit=False,
+    )
+    db.session.commit()
+    # Same one-time reveal as enrolment: the security page pops this key.
+    session["mfa_backup_codes"] = codes
+    flash(
+        "New backup codes generated. The previous codes no longer work - "
+        "save these somewhere safe.",
+        "success",
+    )
     return redirect(url_for("auth.security"))
 
 

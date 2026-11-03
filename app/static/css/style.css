@@ -83,27 +83,77 @@ h6 {
   font-weight: 700;
 }
 
-/* --- Dark Theme: Bootstrap Component Overrides --- */
-/* Bootstrap ships light-only colors for these components; without these
-   overrides panels, wells, tables and form hints stay light-on-dark. */
-[data-theme="dark"] .panel {
+/* --- Panel Cards --- */
+/* Bootstrap ships .panel as a square, flat-gray box. Restyle it into the same
+   rounded card language as .post / .profile-header / .auth-card so the
+   security center, MFA setup and admin console all read as one design. Every
+   color comes from a theme variable, so dark mode needs no extra panel rules
+   beyond the danger-zone accent pair. */
+.panel {
   background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+  /* Clips the square heading corners to the card radius. Nothing inside a
+     panel needs to escape (the only dropdown lives in the navbar). */
+  overflow: hidden;
+}
+
+.panel-default {
   border-color: var(--border-color);
 }
 
-[data-theme="dark"] .panel-default {
-  border-color: var(--border-color);
-}
-
-[data-theme="dark"] .panel-default>.panel-heading {
+.panel>.panel-heading {
   background-color: var(--bg-subtle);
   color: var(--text-main);
-  border-color: var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  font-size: 15px;
+  padding: 14px 18px;
 }
 
-[data-theme="dark"] .panel-body {
-  background-color: var(--bg-card);
+.panel>.panel-body {
+  background-color: transparent;
   color: var(--text-body);
+  padding: 18px;
+}
+
+/* Heading that carries action buttons: title left, buttons right. Flex keeps
+   the buttons inside the heading at every width - the previous floated forms
+   overflowed the 43px heading and landed on top of the table below it. */
+.panel-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.panel-heading-title {
+  font-weight: 600;
+}
+
+.panel-heading-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-heading-form {
+  display: inline;
+  margin: 0;
+}
+
+/* Danger zone keeps a red identity in both themes. */
+.panel-danger {
+  border-color: #fecaca;
+}
+
+.panel-danger>.panel-heading {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border-bottom-color: #fecaca;
 }
 
 [data-theme="dark"] .panel-danger {
@@ -113,8 +163,13 @@ h6 {
 [data-theme="dark"] .panel-danger>.panel-heading {
   background-color: #7f1d1d;
   color: #fecaca;
-  border-color: #7f1d1d;
+  border-bottom-color: #7f1d1d;
 }
+
+/* --- Dark Theme: Bootstrap Component Overrides --- */
+/* Bootstrap ships light-only colors for these components; without these
+   overrides wells, tables and form hints stay light-on-dark (panels are
+   themed by the variable-driven rules above). */
 
 [data-theme="dark"] .well {
   background-color: var(--bg-subtle);
@@ -947,6 +1002,8 @@ h6 {
   padding: 24px;
   border-radius: 14px;
   box-shadow: var(--card-shadow);
+  /* Match the .page-header top rhythm used on every other page. */
+  margin-top: 20px;
   margin-bottom: 24px;
   transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -1023,6 +1080,27 @@ h6 {
   font-size: 12px;
   font-weight: 600;
   margin-left: 4px;
+}
+
+/* Follow/unfollow submit buttons sit in the flex row like the link buttons */
+.profile-button-form {
+  display: inline-flex;
+  margin: 0;
+}
+
+/* "Follows you" is a status tag, not a metric - keep it quiet so it does not
+   compete with the primary Follow button next to it. */
+.profile-buttons .badge.profile-follows-you {
+  background-color: var(--bg-subtle);
+  color: var(--text-body);
+  border: 1px solid var(--border-color);
+  margin-left: 2px;
+}
+
+/* "Posts by <user>" reuses .section-title (as on search); h3 carries a
+   default top margin that would double the gap under the profile card. */
+.profile-posts-title {
+  margin-top: 0;
 }
 
 /* --- Followers Table --- */
@@ -1692,4 +1770,125 @@ a.btn-danger:focus {
 .password-match-hint.mismatched {
   display: flex;
   color: #ef4444;
+}
+
+/* ==========================================================================
+   Account Security Center (/auth/security)
+   ========================================================================== */
+
+/* One-time backup code reveal */
+.backup-codes-alert ul.backup-codes-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  columns: 2;
+}
+
+.backup-codes-alert li {
+  margin-bottom: 4px;
+}
+
+.backup-codes-alert code {
+  background-color: rgba(255, 255, 255, 0.65);
+  color: inherit;
+  font-size: 13px;
+}
+
+[data-theme="dark"] .backup-codes-alert code {
+  background-color: rgba(0, 0, 0, 0.25);
+}
+
+/* Secondary action under the disable form */
+.mfa-secondary-actions {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.mfa-secondary-actions form {
+  margin: 0 0 6px;
+}
+
+.mfa-secondary-actions p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.credentials-meta {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 13px;
+}
+
+/* Sessions table: fixed layout so the (very long) user agent string is
+   ellipsised inside its column instead of stretching rows to 130px+. */
+.sessions-table {
+  table-layout: fixed;
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.sessions-table>thead>tr>th {
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 12px 10px;
+}
+
+.sessions-table>tbody>tr>td {
+  border-top: 1px solid var(--border-color);
+  padding: 14px 12px;
+  vertical-align: middle;
+}
+
+.sessions-table>thead>tr>th:first-child,
+.sessions-table>tbody>tr>td:first-child {
+  width: 56%;
+  padding-left: 0;
+}
+
+.sessions-table>thead>tr>th:nth-child(2),
+.sessions-table>tbody>tr>td:nth-child(2) {
+  width: 26%;
+}
+
+.sessions-table .sessions-actions-col {
+  width: 18%;
+  text-align: right;
+  padding-right: 0;
+  white-space: nowrap;
+}
+
+.session-device .label {
+  margin-bottom: 4px;
+}
+
+.session-agent {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-ip {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.session-last-seen {
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.session-revoke-form {
+  display: inline;
+  margin: 0;
 }
