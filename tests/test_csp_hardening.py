@@ -52,7 +52,7 @@ class CSPHardeningTestCase(IAMTestCase):
 
         # Verify script-src-attr directive allows jQuery feature-detection hash via unsafe-hashes
         self.assertIn("script-src-attr", csp)
-        self.assertIn("'sha256-47mKTaNxEn1L3mSDAz9muidMqwW3Gxcw7CFAK/YnPdg='", csp)
+        self.assertIn("'sha256-47mKTaMaEn1L3m5DAz9muidMqw636xxw7EFAK/YnPdg='", csp)
 
     def test_no_inline_event_handlers_in_templates(self):
         """Verify rendered pages avoid inline onsubmit/onclick handlers in favor of data-confirm."""
