@@ -159,10 +159,10 @@ class BasicsTestCase(unittest.TestCase):
             {
                 "SECRET_KEY": "super-secret-prod-key",
                 "BLOGG_MFA_ENCRYPTION_KEY": "YmxvZ2ctdGVzdC1tZmEtZW5jcnlwdGlvbi1rZXktMzI=",
+                "DATABASE_URL": "sqlite://",
             },
         ):
             prod_app = create_app("production")
-            prod_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
             with prod_app.app_context():
                 db.create_all()
             prod_client = prod_app.test_client()
