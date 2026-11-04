@@ -166,6 +166,75 @@ h6 {
   border-bottom-color: #7f1d1d;
 }
 
+/* --- Admin console: user Actions panel --- */
+/* Replaces .btn-group-vertical, which stacked every button flush against the
+   next into a solid wall of colour. A spaced flex list keeps each action
+   distinct, and the destructive one lives behind its own labelled divider. */
+.admin-action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.admin-action-list form,
+.admin-danger-zone form {
+  margin: 0;
+}
+
+.admin-danger-zone {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.danger-zone-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #ef4444;
+  margin-bottom: 8px;
+}
+
+/* --- Admin console: dashboard stat cards --- */
+/* Bootstrap's float grid made the fourth card tuck into the leftover gap beside
+   the taller first card (an L-shaped, clustered row) and every card a different
+   height. Flex columns line them up edge to edge, stretch each card to match
+   its row, and keep them 4-across on small screens instead of 3 + 1 orphan. */
+.admin-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 0;
+  margin-bottom: 20px;
+}
+
+.admin-stats>[class*="col-"] {
+  float: none;
+  flex: 0 0 100%;
+  max-width: 100%;
+}
+
+.admin-stats .panel {
+  height: 100%;
+  margin-bottom: 0;
+}
+
+@media (min-width: 768px) {
+  .admin-stats>[class*="col-"] {
+    flex: 0 0 25%;
+    max-width: 25%;
+  }
+}
+
+.stat-number {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
 /* --- Dark Theme: Bootstrap Component Overrides --- */
 /* Bootstrap ships light-only colors for these components; without these
    overrides wells, tables and form hints stay light-on-dark (panels are
@@ -393,6 +462,11 @@ h6 {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    /* Wider than the 960px content container: brand + 5 links + search + 4
+       right-side items measure ~895px, so at 960 the bar was packed edge to
+       edge (links even wrapped to two lines). 1120px leaves ~50px of air on
+       each side of the search box while staying close to the content width. */
+    max-width: 1120px;
     min-height: 62px;
     padding-top: 0;
     padding-bottom: 0;
@@ -409,7 +483,7 @@ h6 {
     align-items: center;
     justify-content: space-between;
     flex: 1;
-    margin-left: 20px;
+    margin-left: 16px;
     padding: 0;
     float: none;
     border: none;
@@ -421,7 +495,7 @@ h6 {
     align-items: center;
     margin: 0;
     float: none;
-    gap: 4px;
+    gap: 6px;
   }
 
   .navbar-inverse .navbar-nav>li {
@@ -430,14 +504,27 @@ h6 {
     float: none;
   }
 
+  /* No margin-left:auto here: the collapse already uses space-between, so the
+     free space is split evenly around the search box instead of bunching the
+     left cluster against it and shoving every right-side item together. */
   .navbar-inverse .navbar-nav.navbar-right {
-    margin-left: auto;
+    margin-left: 0;
     float: none !important;
-    gap: 8px;
+    gap: 6px;
+  }
+
+  /* From 910px up there is room for the search box to yield instead: pin the
+     right-hand group so its labels never compress onto a second line (flex
+     shrinks items proportionally, which otherwise wraps "Moderate Comments").
+     Below that the bar flexes and wraps as it always has. */
+  @media (min-width: 910px) {
+    .navbar-inverse .navbar-nav.navbar-right {
+      flex-shrink: 0;
+    }
   }
 
   .search-form {
-    margin: 0 0 0 20px;
+    margin: 0 12px;
     padding: 0;
     border: none;
     box-shadow: none;
@@ -513,12 +600,18 @@ h6 {
   border-radius: 20px 0 0 20px !important;
   height: 34px;
   padding: 6px 14px;
-  width: 190px;
+  width: 180px;
+  /* Cap the size=20 default (~242px) so the box claims a predictable slice
+     of the navbar; the placeholder (≈175px) still fits at 210. min-width is
+     the flex-shrink floor for half-screen windows: the search box gives way
+     instead of forcing "Moderate Comments" onto a second navbar line. */
+  max-width: 210px;
+  min-width: 110px;
   transition: width 0.2s ease, background-color 0.2s ease;
 }
 
 .search-input:focus {
-  width: 240px;
+  width: 210px;
   background-color: rgba(255, 255, 255, 0.15) !important;
   outline: none;
   box-shadow: none !important;
@@ -1319,6 +1412,55 @@ h6 {
 .form-group {
   margin-bottom: 18px;
   width: 100%;
+}
+
+/* --- Inline Forms (admin filter bars, quick action rows) --- */
+/* The width:100% above is right for stacked forms, but it also applies inside
+   a .form-inline, where Bootstrap only overrides display/margin - every group
+   therefore claimed a full row and the filter controls piled up in a cramped,
+   uneven column. Lay inline forms out as a wrapping flex row with a gap so a
+   filter bar reads as one toolbar, and keep controls at a consistent natural
+   width instead of full-bleed blocks. */
+.form-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-inline .form-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  flex: 0 1 auto;
+  margin-bottom: 0;
+}
+
+/* Only groups holding a text field stretch: the field then soaks up the
+   row's leftover width so the submit/reset buttons can never wrap, while
+   groups with just a label+select stay tucked against their button. */
+.form-inline .form-group:has(> input.form-control) {
+  flex: 1 1 auto;
+}
+
+.form-inline .form-control {
+  width: auto;
+  min-width: 150px;
+}
+
+.form-inline input.form-control {
+  /* Grows to soak up any leftover row width so the buttons never wrap onto
+     a second line, while still shrinking to 180px on tight screens. */
+  flex: 1 1 auto;
+  min-width: 180px;
+}
+
+/* Match button height to the 34px inputs/selects beside them. */
+.form-inline .btn {
+  flex-shrink: 0;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
 .btn-block {
