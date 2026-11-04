@@ -538,11 +538,7 @@ def change_email(token):
 @auth.route("/security")
 @login_required
 def security():
-    sessions = (
-        UserSession.query.filter_by(user_id=current_user.id, revoked_at=None)
-        .order_by(UserSession.last_seen_at.desc())
-        .all()
-    )
+    sessions = UserSession.get_active_sessions(current_user.id)
     current_jti = session.get("session_jti")
     backup_codes = session.pop("mfa_backup_codes", None)
     return render_template(

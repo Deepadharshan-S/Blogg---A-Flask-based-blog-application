@@ -51,11 +51,7 @@ def revoke_token(id):
 @scope_required("tokens:manage")
 def list_sessions():
     """List your active login sessions/devices."""
-    rows = (
-        UserSession.query.filter_by(user_id=g.current_user.id, revoked_at=None)
-        .order_by(UserSession.last_seen_at.desc())
-        .all()
-    )
+    rows = UserSession.get_active_sessions(g.current_user.id)
     return jsonify(
         {"sessions": [r.to_json() for r in rows], "current_jti": session.get("session_jti")}
     )

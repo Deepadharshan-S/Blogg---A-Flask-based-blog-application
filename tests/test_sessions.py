@@ -142,3 +142,31 @@ class SessionManagementTestCase(IAMTestCase):
         self.assertIn("Session not found.", response.get_data(as_text=True))
         row = db.session.get(UserSession, other_jti)
         self.assertIsNone(row.revoked_at)
+
+    def test_security_page_cleans_up_and_excludes_expired_ghost_sessions(self):
+        """Orphaned sessions that timed out while idle are pruned from active listings."""
+        self.login()
+        jti_old = self._current_jti()
+        row_old = db.session.get(UserSession, jti_old)
+
+        # Make the old session idle past the timeout
+        idle_minutes = self.app.config["BLOGG_SESSION_IDLE_MINUTES"]
+        row_old.last_seen_at = utc_now() - timedelta(minutes=idle_minutes + 10)
+        db.session.add(row_old)
+        db.session.commit()
+
+        # New login on another client
+        client_new = self.app.test_client()
+        self.login(client=client_new)
+
+        # Visiting security page on client_new should only show the 1 active session
+        response = client_new.get("/auth/security")
+        self.assertEqual(response.status_code, 200)
+
+        active = UserSession.get_active_sessions(self.user.id)
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].jti, self._current_jti(client=client_new))
+
+        # The old session was marked revoked_at
+        db.session.refresh(row_old)
+        self.assertIsNotNone(row_old.revoked_at)

@@ -1121,6 +1121,35 @@ class UserSession(db.Model):
             "user_agent": self.user_agent,
         }
 
+    @classmethod
+    def get_active_sessions(cls, user_id=None, limit=None):
+        """Query unrevoked sessions and lazily mark expired sessions as revoked.
+
+        Returns only genuinely active, unexpired UserSession records.
+        """
+        idle = current_app.config.get("BLOGG_SESSION_IDLE_MINUTES", 60) if current_app else 60
+        query = cls.query.filter_by(revoked_at=None)
+        if user_id is not None:
+            query = query.filter_by(user_id=user_id)
+        raw_sessions = query.order_by(cls.last_seen_at.desc()).all()
+
+        active = []
+        dirty = False
+        now = utc_now()
+        for s in raw_sessions:
+            if s.is_expired(idle, now=now):
+                s.revoked_at = now
+                db.session.add(s)
+                dirty = True
+            else:
+                active.append(s)
+        if dirty:
+            db.session.commit()
+
+        if limit is not None:
+            return active[:limit]
+        return active
+
 
 class ApiToken(db.Model):
     """Opaque, revocable, scoped API token (stored as a SHA-256 hash)."""

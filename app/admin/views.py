@@ -62,7 +62,7 @@ def dashboard():
         "administrators": administrator_count(),
         "roles": Role.query.count(),
         "posts": Post.query.count(),
-        "active_sessions": UserSession.query.filter_by(revoked_at=None).count(),
+        "active_sessions": len(UserSession.get_active_sessions()),
         "issued_tokens": ApiToken.query.filter_by(revoked_at=None).count(),
         "audit_events": AuditEvent.query.count(),
         "access_logs": AccessLog.query.count(),
@@ -390,12 +390,7 @@ def user_detail(id):
 
         return redirect(url_for("admin.user_detail", id=user.id))
 
-    sessions = (
-        UserSession.query.filter_by(user_id=user.id, revoked_at=None)
-        .order_by(UserSession.last_seen_at.desc())
-        .limit(10)
-        .all()
-    )
+    sessions = UserSession.get_active_sessions(user.id, limit=10)
     events = (
         AuditEvent.query.filter(
             or_(
