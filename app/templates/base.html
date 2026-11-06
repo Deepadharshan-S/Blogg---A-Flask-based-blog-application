@@ -187,38 +187,43 @@
       });
     });
 
-    // Dropdown toggle fallback for click & touch
-    document.querySelectorAll('.dropdown-toggle').forEach(function(toggle) {
-      toggle.addEventListener('click', function(e) {
-        e.preventDefault();
-        var parent = toggle.closest('.dropdown');
-        if (parent) {
-          var isOpen = parent.classList.contains('open');
+    // Dropdown toggle fallback for environments where Bootstrap's jQuery plugin is not active
+    if (typeof jQuery === 'undefined' || typeof jQuery.fn.dropdown === 'undefined') {
+      document.querySelectorAll('.dropdown-toggle').forEach(function(toggle) {
+        toggle.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var parent = toggle.closest('.dropdown');
+          if (parent) {
+            var isOpen = parent.classList.contains('open');
+            document.querySelectorAll('.dropdown.open').forEach(function(d) {
+              d.classList.remove('open');
+            });
+            if (!isOpen) {
+              parent.classList.add('open');
+            }
+          }
+        });
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.dropdown')) {
           document.querySelectorAll('.dropdown.open').forEach(function(d) {
             d.classList.remove('open');
           });
-          if (!isOpen) {
-            parent.classList.add('open');
-          }
         }
       });
-    });
-
-    document.addEventListener('click', function(e) {
-      if (!e.target.closest('.dropdown')) {
-        document.querySelectorAll('.dropdown.open').forEach(function(d) {
-          d.classList.remove('open');
-        });
-      }
-    });
+    }
 
     // Mobile navbar toggle fallback
     var navToggle = document.querySelector('.navbar-toggle');
     var navCollapse = document.getElementById('navbar');
     if (navToggle && navCollapse) {
-      navToggle.addEventListener('click', function() {
-        navCollapse.classList.toggle('in');
-      });
+      if (typeof jQuery === 'undefined' || typeof jQuery.fn.collapse === 'undefined') {
+        navToggle.addEventListener('click', function() {
+          navCollapse.classList.toggle('in');
+        });
+      }
     }
 
     // Global confirmation handler using data-confirm attribute

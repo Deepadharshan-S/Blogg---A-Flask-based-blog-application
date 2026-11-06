@@ -73,43 +73,172 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   color: var(--text-main);
   font-weight: 700;
 }
 
-/* --- Dark Theme: Bootstrap Component Overrides --- */
-/* Bootstrap ships light-only colors for these components; without these
-   overrides panels, wells, tables and form hints stay light-on-dark. */
-[data-theme="dark"] .panel {
+/* --- Panel Cards --- */
+/* Bootstrap ships .panel as a square, flat-gray box. Restyle it into the same
+   rounded card language as .post / .profile-header / .auth-card so the
+   security center, MFA setup and admin console all read as one design. Every
+   color comes from a theme variable, so dark mode needs no extra panel rules
+   beyond the danger-zone accent pair. */
+.panel {
   background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+  /* Clips the square heading corners to the card radius. Nothing inside a
+     panel needs to escape (the only dropdown lives in the navbar). */
+  overflow: hidden;
+}
+
+.panel-default {
   border-color: var(--border-color);
 }
 
-[data-theme="dark"] .panel-default {
-  border-color: var(--border-color);
-}
-
-[data-theme="dark"] .panel-default > .panel-heading {
+.panel>.panel-heading {
   background-color: var(--bg-subtle);
   color: var(--text-main);
-  border-color: var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  font-size: 15px;
+  padding: 14px 18px;
 }
 
-[data-theme="dark"] .panel-body {
-  background-color: var(--bg-card);
+.panel>.panel-body {
+  background-color: transparent;
   color: var(--text-body);
+  padding: 18px;
+}
+
+/* Heading that carries action buttons: title left, buttons right. Flex keeps
+   the buttons inside the heading at every width - the previous floated forms
+   overflowed the 43px heading and landed on top of the table below it. */
+.panel-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.panel-heading-title {
+  font-weight: 600;
+}
+
+.panel-heading-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-heading-form {
+  display: inline;
+  margin: 0;
+}
+
+/* Danger zone keeps a red identity in both themes. */
+.panel-danger {
+  border-color: #fecaca;
+}
+
+.panel-danger>.panel-heading {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border-bottom-color: #fecaca;
 }
 
 [data-theme="dark"] .panel-danger {
   border-color: #7f1d1d;
 }
 
-[data-theme="dark"] .panel-danger > .panel-heading {
+[data-theme="dark"] .panel-danger>.panel-heading {
   background-color: #7f1d1d;
   color: #fecaca;
-  border-color: #7f1d1d;
+  border-bottom-color: #7f1d1d;
 }
+
+/* --- Admin console: user Actions panel --- */
+/* Replaces .btn-group-vertical, which stacked every button flush against the
+   next into a solid wall of colour. A spaced flex list keeps each action
+   distinct, and the destructive one lives behind its own labelled divider. */
+.admin-action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.admin-action-list form,
+.admin-danger-zone form {
+  margin: 0;
+}
+
+.admin-danger-zone {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.danger-zone-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #ef4444;
+  margin-bottom: 8px;
+}
+
+/* --- Admin console: dashboard stat cards --- */
+/* Bootstrap's float grid made the fourth card tuck into the leftover gap beside
+   the taller first card (an L-shaped, clustered row) and every card a different
+   height. Flex columns line them up edge to edge, stretch each card to match
+   its row, and keep them 4-across on small screens instead of 3 + 1 orphan. */
+.admin-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 0;
+  margin-bottom: 20px;
+}
+
+.admin-stats>[class*="col-"] {
+  float: none;
+  flex: 0 0 100%;
+  max-width: 100%;
+}
+
+.admin-stats .panel {
+  height: 100%;
+  margin-bottom: 0;
+}
+
+@media (min-width: 768px) {
+  .admin-stats>[class*="col-"] {
+    flex: 0 0 25%;
+    max-width: 25%;
+  }
+}
+
+.stat-number {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+/* --- Dark Theme: Bootstrap Component Overrides --- */
+/* Bootstrap ships light-only colors for these components; without these
+   overrides wells, tables and form hints stay light-on-dark (panels are
+   themed by the variable-driven rules above). */
 
 [data-theme="dark"] .well {
   background-color: var(--bg-subtle);
@@ -122,28 +251,28 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-body);
 }
 
-[data-theme="dark"] .table > thead > tr > th,
-[data-theme="dark"] .table > tbody > tr > th,
-[data-theme="dark"] .table > tfoot > tr > th,
-[data-theme="dark"] .table > thead > tr > td,
-[data-theme="dark"] .table > tbody > tr > td,
-[data-theme="dark"] .table > tfoot > tr > td {
+[data-theme="dark"] .table>thead>tr>th,
+[data-theme="dark"] .table>tbody>tr>th,
+[data-theme="dark"] .table>tfoot>tr>th,
+[data-theme="dark"] .table>thead>tr>td,
+[data-theme="dark"] .table>tbody>tr>td,
+[data-theme="dark"] .table>tfoot>tr>td {
   background-color: var(--bg-card);
   border-color: var(--border-color);
 }
 
-[data-theme="dark"] .table > thead > tr > th {
+[data-theme="dark"] .table>thead>tr>th {
   background-color: var(--bg-subtle);
   color: var(--text-main);
   border-bottom-color: var(--border-color);
 }
 
-[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd),
-[data-theme="dark"] .table-hover > tbody > tr:hover {
+[data-theme="dark"] .table-striped>tbody>tr:nth-of-type(odd),
+[data-theme="dark"] .table-hover>tbody>tr:hover {
   background-color: var(--bg-subtle);
 }
 
-[data-theme="dark"] .table-condensed > tbody > tr > td {
+[data-theme="dark"] .table-condensed>tbody>tr>td {
   background-color: var(--bg-card);
 }
 
@@ -151,13 +280,13 @@ h1, h2, h3, h4, h5, h6 {
   border-bottom-color: var(--border-color);
 }
 
-[data-theme="dark"] .nav-tabs > li > a {
+[data-theme="dark"] .nav-tabs>li>a {
   color: var(--text-muted);
 }
 
-[data-theme="dark"] .nav-tabs > li.active > a,
-[data-theme="dark"] .nav-tabs > li.active > a:hover,
-[data-theme="dark"] .nav-tabs > li.active > a:focus {
+[data-theme="dark"] .nav-tabs>li.active>a,
+[data-theme="dark"] .nav-tabs>li.active>a:hover,
+[data-theme="dark"] .nav-tabs>li.active>a:focus {
   color: var(--text-main);
   background-color: var(--bg-card);
   border-color: var(--border-color);
@@ -248,6 +377,50 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* --- Modern Navbar (Properly Centered) --- */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.navbar-toggle {
+  position: relative;
+  float: right;
+  padding: 8px 10px;
+  margin-top: 14px;
+  margin-right: 15px;
+  margin-bottom: 14px;
+  background-color: transparent;
+  background-image: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.navbar-toggle:hover,
+.navbar-toggle:focus {
+  background-color: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+
+.navbar-toggle .icon-bar {
+  display: block;
+  width: 22px;
+  height: 2px;
+  border-radius: 1px;
+  background-color: #cbd5e1;
+}
+
+.navbar-toggle .icon-bar+.icon-bar {
+  margin-top: 4px;
+}
+
 .navbar-inverse {
   background-color: var(--navbar-bg);
   border: none;
@@ -258,11 +431,42 @@ h1, h2, h3, h4, h5, h6 {
   min-height: 62px;
 }
 
+.nav,
+.navbar-nav,
+.navbar-nav>li,
+.dropdown-menu,
+.dropdown-menu>li {
+  list-style: none !important;
+  list-style-type: none !important;
+  padding-left: 0;
+}
+
+@media (max-width: 767px) {
+  .navbar-collapse {
+    display: none;
+  }
+
+  .navbar-collapse.in {
+    display: block !important;
+  }
+}
+
 @media (min-width: 768px) {
-  .navbar-inverse > .container {
+
+  .navbar-toggle,
+  .navbar-inverse .navbar-toggle {
+    display: none !important;
+  }
+
+  .navbar-inverse>.container {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    /* Wider than the 960px content container: brand + 5 links + search + 4
+       right-side items measure ~895px, so at 960 the bar was packed edge to
+       edge (links even wrapped to two lines). 1120px leaves ~50px of air on
+       each side of the search box while staying close to the content width. */
+    max-width: 1120px;
     min-height: 62px;
     padding-top: 0;
     padding-bottom: 0;
@@ -279,7 +483,7 @@ h1, h2, h3, h4, h5, h6 {
     align-items: center;
     justify-content: space-between;
     flex: 1;
-    margin-left: 20px;
+    margin-left: 16px;
     padding: 0;
     float: none;
     border: none;
@@ -291,23 +495,36 @@ h1, h2, h3, h4, h5, h6 {
     align-items: center;
     margin: 0;
     float: none;
-    gap: 4px;
+    gap: 6px;
   }
 
-  .navbar-inverse .navbar-nav > li {
+  .navbar-inverse .navbar-nav>li {
     display: flex;
     align-items: center;
     float: none;
   }
 
+  /* No margin-left:auto here: the collapse already uses space-between, so the
+     free space is split evenly around the search box instead of bunching the
+     left cluster against it and shoving every right-side item together. */
   .navbar-inverse .navbar-nav.navbar-right {
-    margin-left: auto;
+    margin-left: 0;
     float: none !important;
-    gap: 8px;
+    gap: 6px;
+  }
+
+  /* From 910px up there is room for the search box to yield instead: pin the
+     right-hand group so its labels never compress onto a second line (flex
+     shrinks items proportionally, which otherwise wraps "Moderate Comments").
+     Below that the bar flexes and wraps as it always has. */
+  @media (min-width: 910px) {
+    .navbar-inverse .navbar-nav.navbar-right {
+      flex-shrink: 0;
+    }
   }
 
   .search-form {
-    margin: 0 0 0 20px;
+    margin: 0 12px;
     padding: 0;
     border: none;
     box-shadow: none;
@@ -343,7 +560,7 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 10px var(--primary);
 }
 
-.navbar-inverse .navbar-nav > li > a {
+.navbar-inverse .navbar-nav>li>a {
   color: #94a3b8;
   font-weight: 500;
   font-size: 14px;
@@ -356,15 +573,15 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
 }
 
-.navbar-inverse .navbar-nav > li > a:hover,
-.navbar-inverse .navbar-nav > li > a:focus {
+.navbar-inverse .navbar-nav>li>a:hover,
+.navbar-inverse .navbar-nav>li>a:focus {
   color: #ffffff;
   background-color: rgba(255, 255, 255, 0.08);
 }
 
-.navbar-inverse .navbar-nav > .active > a,
-.navbar-inverse .navbar-nav > .active > a:hover,
-.navbar-inverse .navbar-nav > .active > a:focus {
+.navbar-inverse .navbar-nav>.active>a,
+.navbar-inverse .navbar-nav>.active>a:hover,
+.navbar-inverse .navbar-nav>.active>a:focus {
   color: #ffffff;
   background-color: var(--primary);
 }
@@ -383,12 +600,18 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 20px 0 0 20px !important;
   height: 34px;
   padding: 6px 14px;
-  width: 190px;
+  width: 180px;
+  /* Cap the size=20 default (~242px) so the box claims a predictable slice
+     of the navbar; the placeholder (≈175px) still fits at 210. min-width is
+     the flex-shrink floor for half-screen windows: the search box gives way
+     instead of forcing "Moderate Comments" onto a second navbar line. */
+  max-width: 210px;
+  min-width: 110px;
   transition: width 0.2s ease, background-color 0.2s ease;
 }
 
 .search-input:focus {
-  width: 240px;
+  width: 210px;
   background-color: rgba(255, 255, 255, 0.15) !important;
   outline: none;
   box-shadow: none !important;
@@ -430,43 +653,81 @@ h1, h2, h3, h4, h5, h6 {
   transform: scale(1.05);
 }
 
-.navbar-inverse .navbar-nav > li.dropdown > a {
+.navbar-inverse .navbar-nav>li.dropdown>a {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.navbar-inverse .navbar-nav > li.dropdown > a img {
+.navbar-inverse .navbar-nav>li.dropdown>a img {
   border: 2px solid var(--primary);
   box-shadow: 0 0 6px rgba(99, 102, 241, 0.4);
 }
 
-.dropdown-menu {
-  background-color: var(--bg-card);
-  border-radius: 10px;
-  box-shadow: var(--card-hover-shadow);
-  border: 1px solid var(--border-color);
-  padding: 6px 0;
+.navbar-nav>li.dropdown {
+  position: relative;
 }
 
-.dropdown-menu > li > a {
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: auto;
+  z-index: 1050;
+  min-width: 200px;
+  margin: 6px 0 0;
+  background-color: var(--bg-card);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-color);
+  padding: 6px 0;
+  list-style: none !important;
+}
+
+.dropdown.open>.dropdown-menu,
+.dropdown:hover>.dropdown-menu {
+  display: block !important;
+}
+
+.dropdown-menu .divider {
+  height: 1px;
+  margin: 6px 0;
+  overflow: hidden;
+  background-color: var(--border-color);
+}
+
+.caret {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: 4px;
+  vertical-align: middle;
+  border-top: 4px solid currentColor;
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+}
+
+.dropdown-menu>li>a {
   padding: 8px 20px;
   font-size: 14px;
   color: var(--text-body);
   font-weight: 500;
+  display: block;
+  text-decoration: none;
 }
 
-.dropdown-menu > li > a:hover {
+.dropdown-menu>li>a:hover {
   background-color: var(--bg-subtle);
   color: var(--primary);
 }
 
 /* Dropdown logout submits a CSRF-protected POST; style it like the links */
-.dropdown-menu > li > form {
+.dropdown-menu>li>form {
   margin: 0;
 }
 
-.dropdown-menu > li > form > .dropdown-link {
+.dropdown-menu>li>form>.dropdown-link {
   display: block;
   width: 100%;
   padding: 8px 20px;
@@ -481,8 +742,8 @@ h1, h2, h3, h4, h5, h6 {
   cursor: pointer;
 }
 
-.dropdown-menu > li > form > .dropdown-link:hover,
-.dropdown-menu > li > form > .dropdown-link:focus {
+.dropdown-menu>li>form>.dropdown-link:hover,
+.dropdown-menu>li>form>.dropdown-link:focus {
   background-color: var(--bg-subtle);
   color: var(--primary);
 }
@@ -490,6 +751,12 @@ h1, h2, h3, h4, h5, h6 {
 /* --- Content Container --- */
 .container {
   max-width: 960px;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 15px;
+  padding-right: 15px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* --- Modern Flash Alerts --- */
@@ -828,6 +1095,8 @@ h1, h2, h3, h4, h5, h6 {
   padding: 24px;
   border-radius: 14px;
   box-shadow: var(--card-shadow);
+  /* Match the .page-header top rhythm used on every other page. */
+  margin-top: 20px;
   margin-bottom: 24px;
   transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -904,6 +1173,27 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 12px;
   font-weight: 600;
   margin-left: 4px;
+}
+
+/* Follow/unfollow submit buttons sit in the flex row like the link buttons */
+.profile-button-form {
+  display: inline-flex;
+  margin: 0;
+}
+
+/* "Follows you" is a status tag, not a metric - keep it quiet so it does not
+   compete with the primary Follow button next to it. */
+.profile-buttons .badge.profile-follows-you {
+  background-color: var(--bg-subtle);
+  color: var(--text-body);
+  border: 1px solid var(--border-color);
+  margin-left: 2px;
+}
+
+/* "Posts by <user>" reuses .section-title (as on search); h3 carries a
+   default top margin that would double the gap under the profile card. */
+.profile-posts-title {
+  margin-top: 0;
 }
 
 /* --- Followers Table --- */
@@ -1085,7 +1375,7 @@ h1, h2, h3, h4, h5, h6 {
   border-bottom: 1px solid var(--border-color);
 }
 
-.post-tabs .nav-tabs > li > a {
+.post-tabs .nav-tabs>li>a {
   border-radius: 8px 8px 0 0;
   color: var(--text-muted);
   font-weight: 600;
@@ -1095,9 +1385,9 @@ h1, h2, h3, h4, h5, h6 {
   margin-right: 4px;
 }
 
-.post-tabs .nav-tabs > li.active > a,
-.post-tabs .nav-tabs > li.active > a:hover,
-.post-tabs .nav-tabs > li.active > a:focus {
+.post-tabs .nav-tabs>li.active>a,
+.post-tabs .nav-tabs>li.active>a:hover,
+.post-tabs .nav-tabs>li.active>a:focus {
   color: var(--primary);
   background-color: var(--bg-card);
   border-color: var(--border-color) var(--border-color) var(--bg-card);
@@ -1106,6 +1396,9 @@ h1, h2, h3, h4, h5, h6 {
 
 /* --- Form Controls & Buttons --- */
 .form-control {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   background-color: var(--bg-input);
   color: var(--text-main);
   border-radius: 8px;
@@ -1114,6 +1407,66 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 14px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   box-shadow: none;
+}
+
+.form-group {
+  margin-bottom: 18px;
+  width: 100%;
+}
+
+/* --- Inline Forms (admin filter bars, quick action rows) --- */
+/* The width:100% above is right for stacked forms, but it also applies inside
+   a .form-inline, where Bootstrap only overrides display/margin - every group
+   therefore claimed a full row and the filter controls piled up in a cramped,
+   uneven column. Lay inline forms out as a wrapping flex row with a gap so a
+   filter bar reads as one toolbar, and keep controls at a consistent natural
+   width instead of full-bleed blocks. */
+.form-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-inline .form-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  flex: 0 1 auto;
+  margin-bottom: 0;
+}
+
+/* Only groups holding a text field stretch: the field then soaks up the
+   row's leftover width so the submit/reset buttons can never wrap, while
+   groups with just a label+select stay tucked against their button. */
+.form-inline .form-group:has(> input.form-control) {
+  flex: 1 1 auto;
+}
+
+.form-inline .form-control {
+  width: auto;
+  min-width: 150px;
+}
+
+.form-inline input.form-control {
+  /* Grows to soak up any leftover row width so the buttons never wrap onto
+     a second line, while still shrinking to 180px on tight screens. */
+  flex: 1 1 auto;
+  min-width: 180px;
+}
+
+/* Match button height to the 34px inputs/selects beside them. */
+.form-inline .btn {
+  flex-shrink: 0;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.btn-block {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .form-control:focus {
@@ -1131,39 +1484,49 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.btn-primary, .btn-default.btn-primary {
+.btn-primary,
+.btn-default.btn-primary {
   background-color: var(--primary);
   border-color: var(--primary);
   color: #ffffff;
 }
 
-.btn-primary:hover, .btn-primary:focus {
+.btn-primary:hover,
+.btn-primary:focus {
   background-color: var(--primary-hover);
   border-color: var(--primary-hover);
   color: #ffffff;
   box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
 }
 
-.btn-default, a.btn-default {
+.btn-default,
+a.btn-default {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   color: var(--text-body) !important;
 }
 
-.btn-default:hover, .btn-default:focus, a.btn-default:hover, a.btn-default:focus {
+.btn-default:hover,
+.btn-default:focus,
+a.btn-default:hover,
+a.btn-default:focus {
   background-color: var(--bg-subtle);
   border-color: var(--text-muted);
   color: var(--text-main) !important;
   text-decoration: none;
 }
 
-.btn-danger, a.btn-danger {
+.btn-danger,
+a.btn-danger {
   background-color: #ef4444;
   border-color: #ef4444;
   color: #ffffff !important;
 }
 
-.btn-danger:hover, .btn-danger:focus, a.btn-danger:hover, a.btn-danger:focus {
+.btn-danger:hover,
+.btn-danger:focus,
+a.btn-danger:hover,
+a.btn-danger:focus {
   background-color: #dc2626;
   border-color: #dc2626;
   color: #ffffff !important;
@@ -1171,8 +1534,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* --- Pagination Component --- */
-.pagination > li > a,
-.pagination > li > span {
+.pagination>li>a,
+.pagination>li>span {
   background-color: var(--bg-card);
   color: var(--text-body);
   border-color: var(--border-color);
@@ -1182,16 +1545,16 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 6px;
 }
 
-.pagination > li > a:hover {
+.pagination>li>a:hover {
   background-color: var(--bg-subtle);
   color: var(--primary);
   border-color: var(--border-color);
 }
 
-.pagination > .active > a,
-.pagination > .active > span,
-.pagination > .active > a:hover,
-.pagination > .active > span:hover {
+.pagination>.active>a,
+.pagination>.active>span,
+.pagination>.active>a:hover,
+.pagination>.active>span:hover {
   background-color: var(--primary);
   border-color: var(--primary);
   color: #ffffff;
@@ -1201,8 +1564,12 @@ h1, h2, h3, h4, h5, h6 {
 .auth-page {
   display: flex;
   justify-content: center;
-  align-items: flex-start;
-  padding: 40px 15px 60px 15px;
+  align-items: center;
+  min-height: calc(100vh - 200px);
+  padding: 30px 15px 60px 15px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .auth-card {
@@ -1212,7 +1579,9 @@ h1, h2, h3, h4, h5, h6 {
   padding: 36px 32px;
   width: 100%;
   max-width: 440px;
+  margin: 0 auto;
   box-shadow: var(--card-hover-shadow);
+  box-sizing: border-box;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -1346,70 +1715,526 @@ h1, h2, h3, h4, h5, h6 {
   text-decoration: underline;
 }
 
-/* --- Unconfirmed Account Notice --- */
-.unconfirmed-card {
-  max-width: 500px;
-  margin: 20px auto;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  padding: 32px 28px;
-  text-align: center;
-  box-shadow: var(--card-shadow);
+/* ==========================================================================
+   Dynamic Password Requirements Checklist & Strength Indicator
+   ========================================================================== */
+
+.password-input-wrapper {
+  position: relative;
+  width: 100%;
 }
 
-.unconfirmed-card h1 {
-  font-size: 26px;
-  margin-top: 0;
+.password-input-wrapper .form-control {
+  padding-right: 42px;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  z-index: 2;
+}
+
+.password-toggle-btn:hover {
+  color: var(--text-main);
+  background-color: rgba(148, 163, 184, 0.1);
+}
+
+.password-toggle-btn:focus {
+  outline: none;
+  color: var(--primary);
+}
+
+.password-requirements-card {
+  margin-top: -6px;
+  margin-bottom: 18px;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 13px;
+  animation: fadeInDown 0.2s ease-out;
+  transition: all 0.2s ease;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.password-strength-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.password-strength-title {
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 11px;
+}
+
+.password-strength-badge {
+  font-weight: 700;
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background-color: rgba(148, 163, 184, 0.1);
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.password-strength-meter {
+  display: flex;
+  gap: 4px;
+  height: 5px;
   margin-bottom: 12px;
 }
 
-.unconfirmed-card h3 {
+.password-strength-bar {
+  flex: 1;
+  height: 100%;
+  background-color: var(--border-color);
+  border-radius: 3px;
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.password-strength-bar.active-weak {
+  background-color: #ef4444;
+}
+
+.password-strength-bar.active-fair {
+  background-color: #f97316;
+}
+
+.password-strength-bar.active-good {
+  background-color: #eab308;
+}
+
+.password-strength-bar.active-strong {
+  background-color: #3b82f6;
+}
+
+.password-strength-bar.active-very-strong {
+  background-color: #22c55e;
+}
+
+.requirements-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.req-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 0.2s ease, transform 0.15s ease;
+}
+
+.req-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  background-color: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.req-item.met {
+  color: var(--text-main);
+}
+
+.req-item.met .req-icon {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  transform: scale(1.05);
+}
+
+.req-item.unmet.touched {
+  color: var(--text-muted);
+}
+
+.req-item.unmet.touched .req-icon {
+  background-color: rgba(239, 68, 68, 0.15);
   color: #ef4444;
-  font-size: 18px;
-  margin-top: 0;
 }
 
-.unconfirmed-card p {
-  color: var(--text-muted);
-  margin: 12px 0;
-}
-
-.unconfirmed-card .btn {
+/* Match hint below confirm password */
+.password-match-hint {
+  display: none;
+  align-items: center;
+  gap: 6px;
   margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  animation: fadeInDown 0.15s ease-out;
 }
 
-/* --- Error Pages (400/403/404/405/429/500) --- */
-.error-card {
-  max-width: 520px;
-  margin: 30px auto 60px auto;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  padding: 40px 30px;
-  text-align: center;
-  box-shadow: var(--card-shadow);
+.password-match-hint.matched {
+  display: flex;
+  color: #22c55e;
 }
 
-.error-card .error-code {
-  font-size: 72px;
-  font-weight: 800;
-  line-height: 1;
-  color: var(--primary);
-  letter-spacing: -2px;
+.password-match-hint.mismatched {
+  display: flex;
+  color: #ef4444;
 }
 
-.error-card h2 {
-  margin: 12px 0;
+/* ==========================================================================
+   Account Security Center (/auth/security)
+   ========================================================================== */
+
+/* One-time backup code reveal */
+.backup-codes-alert ul.backup-codes-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  columns: 2;
 }
 
-.error-card p {
+.backup-codes-alert li {
+  margin-bottom: 4px;
+}
+
+.backup-codes-alert code {
+  background-color: rgba(255, 255, 255, 0.65);
+  color: inherit;
+  font-size: 13px;
+}
+
+[data-theme="dark"] .backup-codes-alert code {
+  background-color: rgba(0, 0, 0, 0.25);
+}
+
+/* Secondary action under the disable form */
+.mfa-secondary-actions {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.mfa-secondary-actions form {
+  margin: 0 0 6px;
+}
+
+.mfa-secondary-actions p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.credentials-meta {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 13px;
+}
+
+/* Sessions table: fixed layout so the (very long) user agent string is
+   ellipsised inside its column instead of stretching rows to 130px+. */
+.sessions-table {
+  table-layout: fixed;
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.sessions-table>thead>tr>th {
+  border-bottom: 1px solid var(--border-color);
   color: var(--text-muted);
-  font-size: 16px;
-  margin: 12px 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 12px 10px;
 }
 
-.error-card .btn {
-  margin-top: 10px;
+.sessions-table>tbody>tr>td {
+  border-top: 1px solid var(--border-color);
+  padding: 14px 12px;
+  vertical-align: middle;
 }
 
+.sessions-table>thead>tr>th:first-child,
+.sessions-table>tbody>tr>td:first-child {
+  width: 56%;
+  padding-left: 0;
+}
+
+.sessions-table>thead>tr>th:nth-child(2),
+.sessions-table>tbody>tr>td:nth-child(2) {
+  width: 26%;
+}
+
+.sessions-table .sessions-actions-col {
+  width: 18%;
+  text-align: right;
+  padding-right: 0;
+  white-space: nowrap;
+}
+
+.session-device .label {
+  margin-bottom: 4px;
+}
+
+.session-agent {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-ip {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.session-last-seen {
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.session-revoke-form {
+  display: inline;
+  margin: 0;
+}
+
+/* ==========================================================================
+   Utility Classes (Replacing Inline Styles for Strict CSP Compliance)
+   ========================================================================== */
+
+.d-inline {
+  display: inline !important;
+}
+
+.d-inline-block {
+  display: inline-block !important;
+}
+
+.w-100 {
+  width: 100% !important;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.mb-0 {
+  margin-bottom: 0 !important;
+}
+
+.mb-5 {
+  margin-bottom: 5px !important;
+}
+
+.mb-8 {
+  margin-bottom: 8px !important;
+}
+
+.mb-10 {
+  margin-bottom: 10px !important;
+}
+
+.mb-15 {
+  margin-bottom: 15px !important;
+}
+
+.mt-0 {
+  margin-top: 0 !important;
+}
+
+.mt-4 {
+  margin-top: 4px !important;
+}
+
+.mt-5 {
+  margin-top: 5px !important;
+}
+
+.mt-10 {
+  margin-top: 10px !important;
+}
+
+.mt-15 {
+  margin-top: 15px !important;
+}
+
+.mt-24 {
+  margin-top: 24px !important;
+}
+
+.font-size-11 {
+  font-size: 11px !important;
+}
+
+.font-size-12 {
+  font-size: 12px !important;
+}
+
+.font-size-14 {
+  font-size: 14px !important;
+}
+
+.word-break-all {
+  word-break: break-all;
+}
+
+.line-height-1-6 {
+  line-height: 1.6;
+}
+
+.text-danger-semibold {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.mfa-qr-code {
+  max-width: 220px;
+  image-rendering: pixelated;
+}
+
+.btn-unstyled-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+}
+
+/* ==========================================================================
+   Utility Classes (Replacing Inline Styles for Strict CSP Compliance)
+   ========================================================================== */
+
+.d-inline {
+  display: inline !important;
+}
+
+.d-inline-block {
+  display: inline-block !important;
+}
+
+.w-100 {
+  width: 100% !important;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.mb-0 {
+  margin-bottom: 0 !important;
+}
+
+.mb-5 {
+  margin-bottom: 5px !important;
+}
+
+.mb-8 {
+  margin-bottom: 8px !important;
+}
+
+.mb-10 {
+  margin-bottom: 10px !important;
+}
+
+.mb-15 {
+  margin-bottom: 15px !important;
+}
+
+.mt-0 {
+  margin-top: 0 !important;
+}
+
+.mt-4 {
+  margin-top: 4px !important;
+}
+
+.mt-5 {
+  margin-top: 5px !important;
+}
+
+.mt-10 {
+  margin-top: 10px !important;
+}
+
+.mt-15 {
+  margin-top: 15px !important;
+}
+
+.mt-24 {
+  margin-top: 24px !important;
+}
+
+.font-size-11 {
+  font-size: 11px !important;
+}
+
+.font-size-12 {
+  font-size: 12px !important;
+}
+
+.font-size-14 {
+  font-size: 14px !important;
+}
+
+.word-break-all {
+  word-break: break-all;
+}
+
+.line-height-1-6 {
+  line-height: 1.6;
+}
+
+.text-danger-semibold {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.mfa-qr-code {
+  max-width: 220px;
+  image-rendering: pixelated;
+}
+
+.btn-unstyled-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+}

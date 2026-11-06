@@ -60,7 +60,16 @@
     <div class="panel panel-default">
       <div class="panel-heading">Actions</div>
       <div class="panel-body">
-        <form class="form-inline" method="post">
+        {% if is_step_up_valid %}
+        <div class="alert alert-success mb-10">
+          <small>✓ <strong>Step-Up Active:</strong> High-impact operations authorized.</small>
+        </div>
+        {% else %}
+        <div class="alert alert-warning mb-10">
+          <small><strong>Step-Up Required:</strong> Re-enter your administrator password to confirm role changes or account deletion.</small>
+        </div>
+        {% endif %}
+        <form class="form-inline mb-10" method="post">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="action" value="role">
           <div class="form-group">
@@ -149,10 +158,15 @@
           <span class="danger-zone-label">Danger zone</span>
           <form
             method="post"
-            onsubmit="return confirm('Delete this account? Their posts remain as an anonymous tombstone.');"
+            data-confirm="Delete this account? Their posts remain as an anonymous tombstone."
           >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="delete_user">
+            {% if not is_step_up_valid %}
+            <div class="form-group mb-5">
+              <input type="password" name="admin_password" class="form-control input-sm" placeholder="Confirm admin password to delete" autocomplete="current-password">
+            </div>
+            {% endif %}
             <button type="submit" class="btn btn-danger btn-block">
               Delete account (keep posts)
             </button>
